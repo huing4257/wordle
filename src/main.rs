@@ -5,7 +5,7 @@ use console;
 use std::io::{self, Write};
 // use std::str::Chars;
 use crate::builtin_words::{FINAL, ACCEPTABLE};
-
+use rand::seq::{IteratorRandom};
 /// The main function for the Wordle game, implement your own logic here
 pub const ALPHABET: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
@@ -20,21 +20,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         // println!("I am not in a tty. Please print according to test requirements!");
     }
-    //
-    // if is_tty {
-    //     print!("{}", console::style("Your name: ").bold().red());
-    //     io::stdout().flush().unwrap();
-    // }
-    // let mut line = String::new();
-    // io::stdin().read_line(&mut line)?;
-    // println!("Welcome to wordle, {}!", line.trim());
-    // // example: print arguments
-    // print!("Command line arguments: ");
-    // for arg in std::env::args() {
-    //     print!("{} ", arg);
-    // }
-    //
-    // println!("");
     // TODO: parse the arguments in `args`
     let mut alphabet_color: Vec<Color> = vec![];
     for _i in 0..26 {
@@ -42,20 +27,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         alphabet_color.push(temp);
     }
     let mut word_to_guess = String::new();
-    match std::env::args().nth(1) {
-        Some(arg) => {
-            match &arg[..] {
-                "-w" | "--word" => {
-                    word_to_guess = std::env::args().nth(2).expect("did not input");
+    let mut num_args = 0;
+    // println!("{:?}",std::env::args());
+    loop {
+        //loop to analyze args
+        match std::env::args().nth(num_args) {
+            None => break,
+            Some(arg) => {
+                // println!("{arg}");
+                match &arg[..] {
+                    "-w" | "--word" => {
+                        word_to_guess = std::env::args().nth(num_args + 1).expect("did not input word");
+                    }
+                    "-r"| "--random"=>{
+                        word_to_guess = FINAL.iter().choose(& mut rand::thread_rng()).unwrap().to_string();
+                    }
+                    _ => {}
                 }
-                _ => unimplemented!()
             }
         }
-        None => {
-            io::stdin().read_line(&mut word_to_guess)?;
-            word_to_guess.pop();
-        }
+        num_args += 1;
     }
+    if word_to_guess.is_empty() {
+        io::stdin().read_line(&mut word_to_guess)?;
+        word_to_guess.pop();
+    }
+    word_to_guess = word_to_guess.to_ascii_lowercase();
     let mut is_success: bool = false;
     let mut i = 0;
     while i < 6 {
@@ -67,11 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Error::AlreadyCorrect => {
                         i += 1;
                         is_success = true;
-                        print!(" ");
-                        for i in &alphabet_color {
-                            print!("{}", i.to_string());
-                        }
-                        println!();
+                        print_alphabet(is_tty, &mut alphabet_color);
                         println!("{} {}", error.to_string(), i);
                         break;
                     }
@@ -79,24 +72,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(_ok) => {
                 i += 1;
-                print!(" ");
-                if is_tty {
-                    for i in 0..26 {
-                        print!("{}",
-                               match alphabet_color[i] {
-                                   Color::Y => console::style(ALPHABET[i].to_ascii_uppercase()).yellow(),
-                                   Color::R => console::style(ALPHABET[i].to_ascii_uppercase()).white(),
-                                   Color::G => console::style(ALPHABET[i].to_ascii_uppercase()).green(),
-                                   Color::X => console::style(ALPHABET[i].to_ascii_uppercase()).black().bright()
-                               }
-                        )
-                    }
-                } else {
-                    for i in &alphabet_color {
-                        print!("{}", i.to_string());
-                    }
-                }
-                println!();
+
+                print_alphabet(is_tty, &mut alphabet_color);
             }
         }
     }
@@ -112,6 +89,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+fn print_alphabet(is_tty: bool, alphabet_color: & Vec<Color>) {
+    if is_tty {
+        for i in 0..26 {
+            print!("{}",
+                   match alphabet_color[i] {
+                       Color::Y => console::style(ALPHABET[i].to_ascii_uppercase()).yellow(),
+                       Color::R => console::style(ALPHABET[i].to_ascii_uppercase()).white(),
+                       Color::G => console::style(ALPHABET[i].to_ascii_uppercase()).green(),
+                       Color::X => console::style(ALPHABET[i].to_ascii_uppercase()).black().bright()
+                   }
+            )
+        }
+    } else {
+        for i in alphabet_color {
+            print!("{}", i.to_string());
+        }
+    }
+    println!();
 }
 
 
@@ -164,6 +161,7 @@ fn match_result(guess_word: &String, word_to_guess: &String, alphabet: &mut Vec<
             print!("{}", word_result[i].to_string());
         }
     }
+    print!(" ");
     let color_grade = HashMap::from([
         ("G".to_string(), 4),
         ("Y".to_string(), 3),
@@ -190,6 +188,7 @@ fn guess_1(word_to_guess: &String, alphabet: &mut Vec<Color>) -> Result<(), Erro
     let mut word = String::new();
     io::stdin().read_line(&mut word).expect("cannot read");
     word.pop();
+    //TODO: add verification in different mode
     for i in ACCEPTABLE {
         if word == i.to_string() {
             // println!("valid!");
