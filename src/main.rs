@@ -42,16 +42,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         alphabet_color.push(temp);
     }
     let mut word_to_guess = String::new();
-    match std::env::args().nth(1){
-        Some(arg)=>{
-            match &arg[..]{
-                "-w"|"--word"=>{
-                    word_to_guess=std::env::args().nth(2).expect("did not input");
+    match std::env::args().nth(1) {
+        Some(arg) => {
+            match &arg[..] {
+                "-w" | "--word" => {
+                    word_to_guess = std::env::args().nth(2).expect("did not input");
                 }
-                _=>unimplemented!()
+                _ => unimplemented!()
             }
         }
-        None=>{
+        None => {
             io::stdin().read_line(&mut word_to_guess)?;
             word_to_guess.pop();
         }
@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match error {
                     Error::InvalidWord => { println!("{}", error.to_string()) }
                     Error::AlreadyCorrect => {
-                        i+=1;
+                        i += 1;
                         is_success = true;
                         print!(" ");
                         for i in &alphabet_color {
@@ -78,17 +78,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Ok(_ok) => {
-                i+=1;
+                i += 1;
                 print!(" ");
-                for i in &alphabet_color {
-                    print!("{}", i.to_string());
+                if is_tty {
+                    for i in 0..26 {
+                        print!("{}",
+                               match alphabet_color[i] {
+                                   Color::Y => console::style(ALPHABET[i].to_ascii_uppercase()).yellow(),
+                                   Color::R => console::style(ALPHABET[i].to_ascii_uppercase()).white(),
+                                   Color::G => console::style(ALPHABET[i].to_ascii_uppercase()).green(),
+                                   Color::X => console::style(ALPHABET[i].to_ascii_uppercase()).black().bright()
+                               }
+                        )
+                    }
+                } else {
+                    for i in &alphabet_color {
+                        print!("{}", i.to_string());
+                    }
                 }
                 println!();
             }
         }
     }
     if !is_success {
-        println!("FAILED {}", word_to_guess.to_ascii_uppercase());
+        if is_tty {
+            println!(
+                "{} {}",
+                console::style("FAILED").red(),
+                console::style(word_to_guess.to_ascii_uppercase()).green().italic()
+            );
+        } else {
+            println!("FAILED {}", word_to_guess.to_ascii_uppercase());
+        }
     }
     Ok(())
 }
@@ -129,15 +150,26 @@ fn match_result(guess_word: &String, word_to_guess: &String, alphabet: &mut Vec<
             word_result.push(Color::R);
         }
     }
-    for i in &word_result {
-        print!("{}", i.to_string());
+    for i in 0..5 {
+        if atty::is(atty::Stream::Stdout) {
+            print!("{}",
+                   match word_result[i] {
+                       Color::Y => console::style(guess_word.chars().nth(i).unwrap()).yellow(),
+                       Color::R => console::style(guess_word.chars().nth(i).unwrap()).black().bright(),
+                       Color::G => console::style(guess_word.chars().nth(i).unwrap()).green(),
+                       Color::X => console::style(guess_word.chars().nth(i).unwrap()).white()
+                   }
+            )
+        } else {
+            print!("{}", word_result[i].to_string());
+        }
     }
     let color_grade = HashMap::from([
         ("G".to_string(), 4),
         ("Y".to_string(), 3),
         ("R".to_string(), 2),
         ("X".to_string(), 1)
-    ]);
+    ]);//use hash to mark priority
     for i in 0..26 {
         for j in 0..5 {
             if ALPHABET[i] == guess_word.chars().nth(j).unwrap() {
