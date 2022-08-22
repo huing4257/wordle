@@ -42,8 +42,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         alphabet_color.push(temp);
     }
     let mut word_to_guess = String::new();
-    io::stdin().read_line(&mut word_to_guess)?;
-    word_to_guess.pop();
+    match std::env::args().nth(1){
+        Some(arg)=>{
+            match &arg[..]{
+                "-w"|"--word"=>{
+                    word_to_guess=std::env::args().nth(2).expect("did not input");
+                }
+                _=>unimplemented!()
+            }
+        }
+        None=>{
+            io::stdin().read_line(&mut word_to_guess)?;
+            word_to_guess.pop();
+        }
+    }
     let mut is_success: bool = false;
     let mut i = 0;
     while i < 6 {
