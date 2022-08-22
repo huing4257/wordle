@@ -6,6 +6,7 @@ use std::io::{self, Write};
 // use std::str::Chars;
 use crate::builtin_words::{FINAL, ACCEPTABLE};
 use rand::seq::{IteratorRandom};
+
 /// The main function for the Wordle game, implement your own logic here
 pub const ALPHABET: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
@@ -17,37 +18,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "I am in a tty. Please print {}!",
             console::style("colorful characters").bold().blink().blue()
         );
-    } else {
-        // println!("I am not in a tty. Please print according to test requirements!");
     }
     // TODO: parse the arguments in `args`
+    //initialize alphabet
     let mut alphabet_color: Vec<Color> = vec![];
     for _i in 0..26 {
         let temp = Color::X;
         alphabet_color.push(temp);
     }
     let mut word_to_guess = String::new();
-    let mut num_args = 0;
+    let mut is_difficult: bool = false;
     // println!("{:?}",std::env::args());
-    loop {
-        //loop to analyze args
-        match std::env::args().nth(num_args) {
-            None => break,
-            Some(arg) => {
-                // println!("{arg}");
-                match &arg[..] {
-                    "-w" | "--word" => {
-                        word_to_guess = std::env::args().nth(num_args + 1).expect("did not input word");
-                    }
-                    "-r"| "--random"=>{
-                        word_to_guess = FINAL.iter().choose(& mut rand::thread_rng()).unwrap().to_string();
-                    }
-                    _ => {}
-                }
-            }
-        }
-        num_args += 1;
-    }
+    mode_analyze(&mut word_to_guess, &mut is_difficult);
     if word_to_guess.is_empty() {
         io::stdin().read_line(&mut word_to_guess)?;
         word_to_guess.pop();
@@ -55,9 +37,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     word_to_guess = word_to_guess.to_ascii_lowercase();
     let mut is_success: bool = false;
     let mut i = 0;
+    let mut already_guessed: Vec<(i32, char)> = vec![];
+    // HashMap
     while i < 6 {
         //Guess 6 times
-        match guess_1(&word_to_guess, &mut alphabet_color) {
+        match guess_1(&word_to_guess, &mut alphabet_color, is_difficult, &mut already_guessed) {
             Err(error) => {
                 match error {
                     Error::InvalidWord => { println!("{}", error.to_string()) }
@@ -91,7 +75,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn print_alphabet(is_tty: bool, alphabet_color: & Vec<Color>) {
+fn mode_analyze(word_to_guess: &mut String, is_difficult: &mut bool) {
+    let mut num_args = 0;
+    loop {
+        //loop to analyze args
+        match std::env::args().nth(num_args) {
+            None => break,
+            Some(arg) => {
+                // println!("{arg}");
+                match &arg[..] {
+                    "-w" | "--word" => {
+                        *word_to_guess = std::env::args().nth(num_args + 1).expect("did not input word");
+                    }
+                    "-r" | "--random" => {
+                        *word_to_guess = FINAL.iter().choose(&mut rand::thread_rng()).unwrap().to_string();
+                    }
+                    "-D" | "--difficult" => {
+                        *is_difficult = true
+                    }
+                    _ => {}
+                }
+            }
+        }
+        num_args += 1;
+    }
+}
+
+fn print_alphabet(is_tty: bool, alphabet_color: &Vec<Color>) {
     if is_tty {
         for i in 0..26 {
             print!("{}",
@@ -112,16 +122,34 @@ fn print_alphabet(is_tty: bool, alphabet_color: & Vec<Color>) {
 }
 
 
-fn match_result(guess_word: &String, word_to_guess: &String, alphabet: &mut Vec<Color>) -> Result<(), Error> {
+fn match_result(guess_word: &String,
+                word_to_guess: &String,
+                alphabet: &mut Vec<Color>,
+                is_difficult: bool,
+                already_guessed_position: &mut Vec<(i32, char)>, ) -> Result<(), Error> {
     // Calculate the color, print a string of 5 letters, and return updated alphabet_color
     // First find G, ignore them, then match last letters one by one (first 5 letters)
     // For alphabet, use a vec of 5 to record the condition of 5 letters
-
+    if is_difficult {
+        for temp in already_guessed_position.iter() {
+            if guess_word.chars().nth(temp.0 as usize).unwrap() != temp.1 {
+                return Err(Error::InvalidWord);
+            }
+        }//letters already correct cannot change
+        for i in 0..26 {
+            if let  Color::Y=alphabet[i]{
+                if !guess_word.contains(ALPHABET[i]){
+                    return Err(Error::InvalidWord);
+                }
+            }
+        }//letters in wrong position must be used
+    }
     let mut word_result: Vec<Color> = vec![];
     let mut char_to_ignore: Vec<i32> = vec![];
     for i in 0..5 {
         if guess_word.chars().nth(i as usize) == word_to_guess.chars().nth(i as usize) {
             char_to_ignore.push(i);
+            already_guessed_position.push((i, guess_word.chars().nth(i as usize).unwrap()))
         }
     }
     // println!("{:?}", char_to_ignore);
@@ -183,7 +211,10 @@ fn match_result(guess_word: &String, word_to_guess: &String, alphabet: &mut Vec<
     return Ok(());
 }
 
-fn guess_1(word_to_guess: &String, alphabet: &mut Vec<Color>) -> Result<(), Error> {
+fn guess_1(word_to_guess: &String,
+           alphabet: &mut Vec<Color>,
+           is_difficult: bool,
+           already_guessed_position: &mut Vec<(i32, char)>) -> Result<(), Error> {
     //do guess operation once, and return updated alphabet_color
     let mut word = String::new();
     io::stdin().read_line(&mut word).expect("cannot read");
@@ -193,7 +224,7 @@ fn guess_1(word_to_guess: &String, alphabet: &mut Vec<Color>) -> Result<(), Erro
         if word == i.to_string() {
             // println!("valid!");
             // is_acceptable = true;
-            return match_result(&word, word_to_guess, alphabet);
+            return match_result(&word, word_to_guess, alphabet, is_difficult, already_guessed_position);
         }
     }
     return Err(Error::InvalidWord);
