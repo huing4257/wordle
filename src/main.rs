@@ -1,16 +1,12 @@
 mod builtin_words;
-
 use std::fs;
 use std::collections::HashMap;
 use console;
-use std::io::{self, Write};
+use std::io::{self};
 use std::cmp::Ordering;
-use std::f32::consts::E;
 use rand::{SeedableRng, rngs::StdRng, seq::SliceRandom};
 // use std::str::Chars;
 use crate::builtin_words::{FINAL, ACCEPTABLE};
-use rand::seq::{IteratorRandom};
-
 pub const WORDLE_LENS: usize = 5;
 /// The main function for the Wordle game, implement your own logic here
 pub const ALPHABET: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
@@ -25,8 +21,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     //initialize alphabet
-
-
     let mut word_to_guess = String::new();
     let mut mode = Mode {
         is_random: false,
