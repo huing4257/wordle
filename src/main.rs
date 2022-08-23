@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         is_special_day: false,
         is_final_specified: false,
         is_acceptable_specified: false,
+        is_stated: false,
         succeeded_game: 0,
         failed_game: 0,
         word_guessed_freq: vec![],
@@ -65,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             a
         },
+        state: vec![]
     };
 
     //write a struct to save mode
@@ -217,9 +219,10 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                         if let Ok(whole_string) = fs::read_to_string(&final_path) {
                             for temp in whole_string.split_terminator("\n")
                             {
-                                mode.final_set.push(temp.to_string());
+                                mode.final_set.push(temp.to_string().to_ascii_lowercase());
                             }
                         }
+                        mode.final_set.sort();
                     }
                     "-a" | "--acceptable-set" => {
                         mode.acceptable_set.clear();
@@ -227,7 +230,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                         if let Ok(whole_string) = fs::read_to_string(&acceptable_path) {
                             for temp in whole_string.split_terminator("\n")
                             {
-                                mode.acceptable_set.push(temp.to_string());
+                                mode.acceptable_set.push(temp.to_string().to_ascii_lowercase());
                             }
                         }
                     }
@@ -439,6 +442,14 @@ fn guess_1(word_to_guess: &String,
     }
     return Err(Error::InvalidWord);
 }
+struct Game{
+    answer:String,
+    guesses:Vec<String>
+}
+struct State{
+    total_rounds:i32,
+    games:Vec<Game>
+}
 
 struct Mode {
     is_difficult: bool,
@@ -449,6 +460,7 @@ struct Mode {
     is_special_day: bool,
     is_final_specified: bool,
     is_acceptable_specified: bool,
+    is_stated:bool,
     succeeded_game: i32,
     failed_game: i32,
     word_guessed_freq: Vec<(String, i32)>,
@@ -460,6 +472,7 @@ struct Mode {
     shuffled_seq: Vec<usize>,
     final_set: Vec<String>,
     acceptable_set: Vec<String>,
+    state:Vec<State>
 }
 
 #[derive(Debug)]
