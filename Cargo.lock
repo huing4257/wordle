@@ -369,5 +369,6 @@ dependencies = [
  "ntest",
  "pretty_assertions",
  "rand",
+ "rand_core",
  "serde_json",
 ]

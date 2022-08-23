@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use console;
 use std::io::{self, Write};
 use std::cmp::Ordering;
+use std::f32::consts::E;
+use rand::{SeedableRng, rngs::StdRng, seq::SliceRandom};
 // use std::str::Chars;
 use crate::builtin_words::{FINAL, ACCEPTABLE};
 use rand::seq::{IteratorRandom};
@@ -28,16 +30,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut mode = Mode {
         is_random: false,
         is_difficult: false,
-        is_specified: false,
+        is_word_specified: false,
         is_stats: false,
+        is_seeded: false,
+        is_special_day: false,
         succeeded_game: 0,
         failed_game: 0,
         word_guessed_freq: vec![],
         succeed_guess_times: vec![],
         words_appeared: vec![],
+        day: 1,
+        seed: 0,
+        rng: SeedableRng::seed_from_u64(0),
+        shuffled_seq: {
+            let mut temp:Vec<usize> =(0..FINAL.len()).collect();
+            let mut rng:StdRng=SeedableRng::seed_from_u64(0);
+            temp.shuffle(& mut rng);
+            temp
+        },
     };
+
     //write a struct to save mode
-    mode_analyze(&mut word_to_guess, &mut mode);
+    mode_analyze(&mut word_to_guess, &mut mode).unwrap();
     let mut is_continue_playing = true;
     //play several times
     while is_continue_playing {
@@ -46,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(err) => println!("{}", err.to_string())
         }
         //if in --word mode, break
-        if mode.is_specified {
+        if mode.is_word_specified {
             break;
         }
         //judge if continue
@@ -72,27 +86,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if mode.is_stats {
             let round_times = mode.succeed_guess_times.len() as i32;
             let total_times: i32 = mode.succeed_guess_times.iter().sum();
-            let average= if mode.succeed_guess_times.len()!=0 {
-                ( total_times / round_times) as f64
-            }else { 0.00 };
-            println!("{} {} {:.2}", mode.succeeded_game, mode.failed_game,average);
-            mode.word_guessed_freq.sort_by(|a, b| match b.1.cmp(&a.1){
-                Ordering::Greater|Ordering::Less=>b.1.cmp(&a.1),
+            let average = if mode.succeed_guess_times.len() != 0 {
+                (total_times / round_times) as f64
+            } else { 0.00 };
+            println!("{} {} {:.2}", mode.succeeded_game, mode.failed_game, average);
+            mode.word_guessed_freq.sort_by(|a, b| match b.1.cmp(&a.1) {
+                Ordering::Greater | Ordering::Less => b.1.cmp(&a.1),
                 Ordering::Equal => a.0.cmp(&b.0)
             });
             let show_limit: i32 = if mode.word_guessed_freq.len() < 5 {
                 mode.word_guessed_freq.len() as i32
             } else { 5 };
-            let mut i=1;
+            let mut i = 1;
             for temp in &mode.word_guessed_freq {
                 // println!("{}",show_limit);
                 // println!("{}",i);
-                if  i==show_limit {
-                    println!("{} {}",temp.0.to_ascii_uppercase(),temp.1);
+                if i == show_limit {
+                    println!("{} {}", temp.0.to_ascii_uppercase(), temp.1);
                     break;
                 }
-                print!("{} {} ",temp.0.to_ascii_uppercase(),temp.1 );
-                i+=1;
+                print!("{} {} ", temp.0.to_ascii_uppercase(), temp.1);
+                i += 1;
             }
         }
     }
@@ -100,7 +114,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<(), Error> {
-
+    //do guess loop, and decide word to guess for each
+    let game_time=mode.failed_game+mode.succeeded_game;
     let mut alphabet_color: Vec<Color> = vec![];
     for _i in 0..26 {
         let temp = Color::X;
@@ -108,12 +123,13 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     }
     let is_tty = atty::is(atty::Stream::Stdout);
     if mode.is_random {
-        *word_to_guess = FINAL.iter().choose(&mut rand::thread_rng()).unwrap().to_string();
+        let start_day=game_time+mode.day;
+        *word_to_guess = FINAL.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
         while mode.words_appeared.contains(&word_to_guess) {
-            *word_to_guess = FINAL.iter().choose(&mut rand::thread_rng()).unwrap().to_string();
+            *word_to_guess = FINAL.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
         }
         mode.words_appeared.push(word_to_guess.clone());
-    } else if !mode.is_specified{
+    } else if !mode.is_word_specified {
         word_to_guess.clear();
         io::stdin().read_line(&mut word_to_guess).unwrap();
         word_to_guess.pop();
@@ -138,6 +154,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
                         mode.succeed_guess_times.push(guess_times);
                         break;
                     }
+                    Error::InvalidArgs => {}
                 }
             }
             Ok(_ok) => {
@@ -163,7 +180,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     return Ok(());
 }
 
-fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) {
+fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<Ok(()),Error> {
     let mut num_args = 0;
     loop {
         //loop to analyze args
@@ -173,7 +190,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) {
                 // println!("{arg}");
                 match &arg[..] {
                     "-w" | "--word" => {
-                        mode.is_specified = true;
+                        mode.is_word_specified = true;
                         *word_to_guess = std::env::args().nth(num_args + 1).expect("did not input word");
                     }
                     "-r" | "--random" => {
@@ -185,12 +202,39 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) {
                     "-t" | "--stats" => {
                         mode.is_stats = true
                     }
+                    "-d" | "--day" => {
+                        mode.is_special_day=true;
+                        mode.day =
+                            std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
+                    }
+                    "-s" | "--seed" => {
+                        mode.is_seeded=true;
+                        mode.seed =
+                            std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
+                        mode.shuffled_seq={
+                            let mut temp:Vec<usize> =(0..FINAL.len()).collect();
+                            let mut rng:StdRng=SeedableRng::seed_from_u64(0);
+                            temp.shuffle(& mut rng);
+                            temp
+                        }
+                    }
                     _ => {}
                 }
             }
         }
         num_args += 1;
     }
+    if mode.is_random {
+        if mode.is_word_specified {
+            return Err(Error::InvalidArgs)
+        }
+    }
+    if mode.is_word_specified {
+        if mode.is_seeded||mode.is_special_day {
+            return Err(Error::InvalidArgs)
+        }
+    }
+    Ok(())
 }
 
 fn print_alphabet(is_tty: bool, alphabet_color: &Vec<Color>) {
@@ -329,18 +373,25 @@ fn guess_1(word_to_guess: &String,
 struct Mode {
     is_difficult: bool,
     is_random: bool,
-    is_specified: bool,
+    is_word_specified: bool,
     is_stats: bool,
+    is_seeded:bool,
+    is_special_day:bool,
     succeeded_game: i32,
     failed_game: i32,
     word_guessed_freq: Vec<(String, i32)>,
     succeed_guess_times: Vec<i32>,
     words_appeared: Vec<String>,
+    day: i32,
+    seed: u64,
+    rng: StdRng,
+    shuffled_seq: Vec<usize>,
 }
 
 enum Error {
     InvalidWord,
     AlreadyCorrect,
+    InvalidArgs
 }
 
 #[derive(Debug)]
@@ -376,6 +427,7 @@ impl Error {
         return match &self {
             Error::InvalidWord => { "INVALID".to_string() }
             Error::AlreadyCorrect => { "CORRECT".to_string() }
+            Error::InvalidArgs=>{"InvalidArgs".to_string()}
         };
     }
 }
