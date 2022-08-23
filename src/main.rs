@@ -84,8 +84,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         is_continue_playing = choice.unwrap();
         if mode.is_stats {
-            let round_times = mode.succeed_guess_times.len() as i32;
+            let round_times = mode.succeed_guess_times.len() as f64;
             let total_times: i32 = mode.succeed_guess_times.iter().sum();
+            let total_times =total_times as f64;
             let average = if mode.succeed_guess_times.len() != 0 {
                 (total_times / round_times) as f64
             } else { 0.00 };
@@ -123,7 +124,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     }
     let is_tty = atty::is(atty::Stream::Stdout);
     if mode.is_random {
-        let start_day=game_time+mode.day;
+        let start_day=game_time+mode.day-1;//cause do not exist day0
         *word_to_guess = FINAL.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
         while mode.words_appeared.contains(&word_to_guess) {
             *word_to_guess = FINAL.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
@@ -213,7 +214,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<(),Error> {
                             std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
                         mode.shuffled_seq={
                             let mut temp:Vec<usize> =(0..FINAL.len()).collect();
-                            let mut rng:StdRng=SeedableRng::seed_from_u64(0);
+                            let mut rng:StdRng=SeedableRng::seed_from_u64(mode.seed);
                             temp.shuffle(& mut rng);
                             temp
                         }
