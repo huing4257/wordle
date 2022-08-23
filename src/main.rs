@@ -146,7 +146,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
             *word_to_guess = mode.final_set.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
             if !mode.words_appeared.contains(&word_to_guess) {
                 break;
-            }else {
+            } else {
                 *word_to_guess = mode.final_set.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
             }
         }
@@ -210,8 +210,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
             //first decide sets
             None => break,
             Some(arg) => {
-                // println!("{arg}");
-                match  &arg[..] {
+                match &arg[..] {
                     "-f" | "--final-set" => {
                         mode.final_set.clear();
                         let final_path = std::env::args().nth(num_args + 1).expect("did not input word");
@@ -232,8 +231,31 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                             }
                         }
                     }
-                    _=>{}
+                    _ => {}
                 }
+            }
+
+        }
+        num_args+=1;
+    }
+    //verify specified set
+    let mut is_contain:bool=true;
+    for temp in &mode.final_set {
+        if !mode.acceptable_set.contains(&temp) {
+            is_contain=false;
+        }
+    }
+    if !is_contain {
+        return Err(Error::InvalidArgs)
+    }
+    let mut num_args = 0;
+    loop {
+        //loop to analyze args
+        match std::env::args().nth(num_args) {
+            //first decide sets
+            None => break,
+            Some(arg) => {
+                // println!("{arg}");
 
                 match &arg[..] {
                     "-w" | "--word" => {
@@ -271,6 +293,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
         }
         num_args += 1;
     }
+    //deal with conflict args
     if mode.is_random {
         if mode.is_word_specified {
             return Err(Error::InvalidArgs);
@@ -424,8 +447,8 @@ struct Mode {
     is_stats: bool,
     is_seeded: bool,
     is_special_day: bool,
-    is_final_specified:bool,
-    is_acceptable_specified:bool,
+    is_final_specified: bool,
+    is_acceptable_specified: bool,
     succeeded_game: i32,
     failed_game: i32,
     word_guessed_freq: Vec<(String, i32)>,
