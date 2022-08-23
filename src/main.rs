@@ -1,5 +1,6 @@
 mod builtin_words;
 
+use std::fs;
 use std::collections::HashMap;
 use console;
 use std::io::{self, Write};
@@ -34,6 +35,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         is_stats: false,
         is_seeded: false,
         is_special_day: false,
+        is_final_specified: false,
+        is_acceptable_specified: false,
         succeeded_game: 0,
         failed_game: 0,
         word_guessed_freq: vec![],
@@ -43,10 +46,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         seed: 0,
         rng: SeedableRng::seed_from_u64(0),
         shuffled_seq: {
-            let mut temp:Vec<usize> =(0..FINAL.len()).collect();
-            let mut rng:StdRng=SeedableRng::seed_from_u64(0);
-            temp.shuffle(& mut rng);
+            let mut temp: Vec<usize> = (0..FINAL.len()).collect();
+            let mut rng: StdRng = SeedableRng::seed_from_u64(0);
+            temp.shuffle(&mut rng);
             temp
+        },
+        final_set: {
+            let mut a: Vec<String> = vec![];
+            for i in FINAL {
+                a.push(i.to_string());
+            };
+            a
+        },
+        acceptable_set: {
+            let mut a: Vec<String> = vec![];
+            for i in ACCEPTABLE {
+                a.push(i.to_string());
+            };
+            a
         },
     };
 
@@ -86,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if mode.is_stats {
             let round_times = mode.succeed_guess_times.len() as f64;
             let total_times: i32 = mode.succeed_guess_times.iter().sum();
-            let total_times =total_times as f64;
+            let total_times = total_times as f64;
             let average = if mode.succeed_guess_times.len() != 0 {
                 (total_times / round_times) as f64
             } else { 0.00 };
@@ -116,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<(), Error> {
     //do guess loop, and decide word to guess for each
-    let game_time=mode.failed_game+mode.succeeded_game;
+    let game_time = mode.failed_game + mode.succeeded_game;
     let mut alphabet_color: Vec<Color> = vec![];
     for _i in 0..26 {
         let temp = Color::X;
@@ -124,10 +141,14 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     }
     let is_tty = atty::is(atty::Stream::Stdout);
     if mode.is_random {
-        let start_day=game_time+mode.day-1;//cause do not exist day0
-        *word_to_guess = FINAL.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
-        while mode.words_appeared.contains(&word_to_guess) {
-            *word_to_guess = FINAL.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
+        let start_day = game_time + mode.day - 1;//cause do not exist day0
+        loop {
+            *word_to_guess = mode.final_set.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
+            if !mode.words_appeared.contains(&word_to_guess) {
+                break;
+            }else {
+                *word_to_guess = mode.final_set.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
+            }
         }
         mode.words_appeared.push(word_to_guess.clone());
     } else if !mode.is_word_specified {
@@ -181,14 +202,39 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     return Ok(());
 }
 
-fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<(),Error> {
+fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error> {
     let mut num_args = 0;
     loop {
         //loop to analyze args
         match std::env::args().nth(num_args) {
+            //first decide sets
             None => break,
             Some(arg) => {
                 // println!("{arg}");
+                match  &arg[..] {
+                    "-f" | "--final-set" => {
+                        mode.final_set.clear();
+                        let final_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        if let Ok(whole_string) = fs::read_to_string(&final_path) {
+                            for temp in whole_string.split_terminator("\n")
+                            {
+                                mode.final_set.push(temp.to_string());
+                            }
+                        }
+                    }
+                    "-a" | "--acceptable-set" => {
+                        mode.acceptable_set.clear();
+                        let acceptable_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        if let Ok(whole_string) = fs::read_to_string(&acceptable_path) {
+                            for temp in whole_string.split_terminator("\n")
+                            {
+                                mode.acceptable_set.push(temp.to_string());
+                            }
+                        }
+                    }
+                    _=>{}
+                }
+
                 match &arg[..] {
                     "-w" | "--word" => {
                         mode.is_word_specified = true;
@@ -204,18 +250,18 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<(),Error> {
                         mode.is_stats = true
                     }
                     "-d" | "--day" => {
-                        mode.is_special_day=true;
+                        mode.is_special_day = true;
                         mode.day =
                             std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
                     }
                     "-s" | "--seed" => {
-                        mode.is_seeded=true;
+                        mode.is_seeded = true;
                         mode.seed =
                             std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
-                        mode.shuffled_seq={
-                            let mut temp:Vec<usize> =(0..FINAL.len()).collect();
-                            let mut rng:StdRng=SeedableRng::seed_from_u64(mode.seed);
-                            temp.shuffle(& mut rng);
+                        mode.shuffled_seq = {
+                            let mut temp: Vec<usize> = (0..mode.final_set.len()).collect();
+                            let mut rng: StdRng = SeedableRng::seed_from_u64(mode.seed);
+                            temp.shuffle(&mut rng);
                             temp
                         }
                     }
@@ -227,12 +273,12 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<(),Error> {
     }
     if mode.is_random {
         if mode.is_word_specified {
-            return Err(Error::InvalidArgs)
+            return Err(Error::InvalidArgs);
         }
     }
     if mode.is_word_specified {
-        if mode.is_seeded||mode.is_special_day {
-            return Err(Error::InvalidArgs)
+        if mode.is_seeded || mode.is_special_day {
+            return Err(Error::InvalidArgs);
         }
     }
     Ok(())
@@ -376,8 +422,10 @@ struct Mode {
     is_random: bool,
     is_word_specified: bool,
     is_stats: bool,
-    is_seeded:bool,
-    is_special_day:bool,
+    is_seeded: bool,
+    is_special_day: bool,
+    is_final_specified:bool,
+    is_acceptable_specified:bool,
     succeeded_game: i32,
     failed_game: i32,
     word_guessed_freq: Vec<(String, i32)>,
@@ -387,12 +435,15 @@ struct Mode {
     seed: u64,
     rng: StdRng,
     shuffled_seq: Vec<usize>,
+    final_set: Vec<String>,
+    acceptable_set: Vec<String>,
 }
+
 #[derive(Debug)]
 enum Error {
     InvalidWord,
     AlreadyCorrect,
-    InvalidArgs
+    InvalidArgs,
 }
 
 #[derive(Debug)]
@@ -428,7 +479,7 @@ impl Error {
         return match &self {
             Error::InvalidWord => { "INVALID".to_string() }
             Error::AlreadyCorrect => { "CORRECT".to_string() }
-            Error::InvalidArgs=>{"InvalidArgs".to_string()}
+            Error::InvalidArgs => { "InvalidArgs".to_string() }
         };
     }
 }
