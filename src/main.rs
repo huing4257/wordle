@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     //write a struct to save mode
-    mode_analyze(&mut word_to_guess, &mut mode).unwrap();
+    mode_analyze(&mut word_to_guess, &mut mode).expect("args error");
     let mut is_continue_playing = true;
     //play several times
     while is_continue_playing {
@@ -180,7 +180,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     return Ok(());
 }
 
-fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<Ok(()),Error> {
+fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode)->Result<(),Error> {
     let mut num_args = 0;
     loop {
         //loop to analyze args
@@ -387,7 +387,7 @@ struct Mode {
     rng: StdRng,
     shuffled_seq: Vec<usize>,
 }
-
+#[derive(Debug)]
 enum Error {
     InvalidWord,
     AlreadyCorrect,
