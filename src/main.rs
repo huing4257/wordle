@@ -7,6 +7,7 @@ use std::io::{self};
 use std::cmp::Ordering;
 use rand::{SeedableRng, rngs::StdRng, seq::SliceRandom};
 use serde::{Deserialize, Serialize};
+use serde_json;
 // use std::str::Chars;
 use crate::builtin_words::{FINAL, ACCEPTABLE};
 
@@ -32,8 +33,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         is_stats: false,
         is_seeded: false,
         is_special_day: false,
-        is_final_specified: false,
-        is_acceptable_specified: false,
         is_stated: false,
         succeeded_game: 0,
         failed_game: 0,
@@ -46,6 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             temp.shuffle(&mut rng);
             temp
         },
+        final_path: "".to_string(),
+        acceptable_path: "".to_string(),
         final_set: {
             let mut a: Vec<String> = vec![];
             for i in FINAL {
@@ -129,8 +130,6 @@ fn print_stats(mode: &mut Mode) {
             add_guessed_word(&mut word_guessed_freq, &guess);
         }
     }
-    //lines before state defined
-    // let total_times = total_times as f64;
     let average = if succeed_rounds != 0.0 {
         succeed_total_guess_times / succeed_rounds
     } else { 0.00 };
@@ -232,33 +231,37 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
 
 fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error> {
     let mut num_args = 0;
+    //loop to analyze args
+    //first load config
     loop {
-        //loop to analyze args
+        match std::env::args().nth(num_args) {
+            //first decide sets
+            None => break,
+            Some(arg) => {
+                match &arg[..] {
+                    "-c" | "--config" => {
+                        let config_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        let config_string = fs::read_to_string(&config_path).expect("config file error");
+                        let config: serde_json::Value = serde_json::from_str(&config_string).expect("config file error");
+                        mode.load_config(word_to_guess,&config);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    //next decide sets
+    loop {
         match std::env::args().nth(num_args) {
             //first decide sets
             None => break,
             Some(arg) => {
                 match &arg[..] {
                     "-f" | "--final-set" => {
-                        mode.final_set.clear();
-                        let final_path = std::env::args().nth(num_args + 1).expect("did not input word");
-                        if let Ok(whole_string) = fs::read_to_string(&final_path) {
-                            for temp in whole_string.split_terminator("\n")
-                            {
-                                mode.final_set.push(temp.to_string().to_ascii_lowercase());
-                            }
-                        }
-                        mode.final_set.sort();
+                        mode.final_path = std::env::args().nth(num_args + 1).expect("did not input word");
                     }
                     "-a" | "--acceptable-set" => {
-                        mode.acceptable_set.clear();
-                        let acceptable_path = std::env::args().nth(num_args + 1).expect("did not input word");
-                        if let Ok(whole_string) = fs::read_to_string(&acceptable_path) {
-                            for temp in whole_string.split_terminator("\n")
-                            {
-                                mode.acceptable_set.push(temp.to_string().to_ascii_lowercase());
-                            }
-                        }
+                        mode.acceptable_path = std::env::args().nth(num_args + 1).expect("did not input word");
                     }
                     _ => {}
                 }
@@ -266,7 +269,13 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
         }
         num_args += 1;
     }
-    //verify specified set
+    if !mode.final_path.is_empty() {
+        set_from_path(&mode.final_path, &mut mode.final_set);
+    }
+    if !mode.acceptable_path.is_empty() {
+        set_from_path(&mode.acceptable_path, &mut mode.acceptable_set);
+    }
+    //verify specified sets' contain relationship
     let mut is_contain: bool = true;
     for temp in &mode.final_set {
         if !mode.acceptable_set.contains(&temp) {
@@ -378,7 +387,7 @@ fn match_result(guess_word: &String,
                 alphabet: &mut Vec<Color>,
                 mode: &mut Mode,
                 already_guessed_position: &mut Vec<(i32, char)>,
-                word_guessed_this_round:& mut Vec<String>) -> Result<(), Error> {
+                word_guessed_this_round: &mut Vec<String>) -> Result<(), Error> {
     // Calculate the color, print a string of 5 letters, and return updated alphabet_color
     // First find G, ignore them, then match last letters one by one (first 5 letters)
     // For alphabet, use a vec of 5 to record the condition of 5 letters
@@ -478,7 +487,7 @@ fn guess_1(word_to_guess: &String,
     word.pop();
     for i in &mode.acceptable_set {
         if word == i.to_string() {
-            return match_result(&word, word_to_guess, alphabet, mode, already_guessed_position,word_guessed_this_round);
+            return match_result(&word, word_to_guess, alphabet, mode, already_guessed_position, word_guessed_this_round);
         }
     }
 
@@ -497,6 +506,18 @@ struct State {
     games: Vec<Game>,
 }
 
+struct Config {
+    random: bool,
+    difficult: bool,
+    stats: bool,
+    day: i32,
+    seed: usize,
+    final_set: String,
+    acceptable_set: String,
+    state: String,
+    word: String,
+}
+
 struct Mode {
     is_difficult: bool,
     is_random: bool,
@@ -504,8 +525,6 @@ struct Mode {
     is_stats: bool,
     is_seeded: bool,
     is_special_day: bool,
-    is_final_specified: bool,
-    is_acceptable_specified: bool,
     is_stated: bool,
     succeeded_game: i32,
     failed_game: i32,
@@ -513,10 +532,53 @@ struct Mode {
     day: i32,
     seed: u64,
     shuffled_seq: Vec<usize>,
+    final_path: String,
+    acceptable_path: String,
     final_set: Vec<String>,
     acceptable_set: Vec<String>,
     state: State,
     state_path: String,
+}
+
+impl Mode {
+    fn load_config(&mut self,word_to_guess:&mut String,config: &serde_json::Value) {
+        if let Some(is_random) = config.get("random") {
+            self.is_random = is_random.as_bool().expect("config file error");
+        }
+        if let Some(is_difficult) = config.get("difficult") {
+            self.is_difficult = is_difficult.as_bool().expect("config file error");
+        }
+        if let Some(is_stats) = config.get("stats") {
+            self.is_stats = is_stats.as_bool().expect("config file error");
+        }
+        if let Some(day) = config.get("day") {
+            self.is_special_day = true;
+            self.day = day.as_i64().expect("config file error") as i32;
+        }
+        if let Some(seed) = config.get("seed") {
+            self.is_seeded = true;
+            self.seed = seed.as_u64().expect("config file error")
+        }
+        if let Some(final_set_path) = config.get("final_set") {
+            self.final_path = final_set_path.as_str().expect("config file error").to_string();
+        }
+        if let Some(acceptable_path) = config.get("acceptable_set") {
+            self.acceptable_path = acceptable_path.as_str().expect("config file error").to_string();
+        }
+        if let Some(state_path) = config.get("state") {
+            self.is_stated = true;
+            self.state_path = state_path.as_str().expect("config file error").to_string();
+            if let Ok(state_string) = fs::read_to_string(&self.state_path) {
+                if state_string != "{}" {
+                    self.state = serde_json::from_str(&state_string).expect("config file error")
+                }
+            }
+        }
+        if let Some(word) = config.get("word") {
+            self.is_word_specified = true;
+            *word_to_guess=word.as_str().expect("config file error").to_string();
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -574,5 +636,16 @@ fn add_guessed_word(freq_list: &mut Vec<(String, i32)>, word: &String) {
     }
     if !contain {
         freq_list.push((word.clone(), 1))
+    }
+}
+
+fn set_from_path(path: &String, set: &mut Vec<String>) {
+    if let Ok(whole_string) = fs::read_to_string(&path) {
+        set.clear();
+        for temp in whole_string.split_terminator("\n")
+        {
+            set.push(temp.to_string().to_ascii_lowercase());
+        }
+        set.sort();
     }
 }
