@@ -249,8 +249,10 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                 }
             }
         }
+        num_args+=1;
     }
     //next decide sets
+    let mut num_args = 0;
     loop {
         match std::env::args().nth(num_args) {
             //first decide sets
