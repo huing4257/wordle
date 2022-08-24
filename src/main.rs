@@ -37,8 +37,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         is_stated: false,
         succeeded_game: 0,
         failed_game: 0,
-        word_guessed_freq: vec![],
-        succeed_guess_times: vec![],
         words_appeared: vec![],
         day: 1,
         seed: 0,
@@ -115,23 +113,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+
 fn print_stats(mode: &mut Mode) {
-    let round_times = mode.succeed_guess_times.len() as f64;
-    let total_times: i32 = mode.succeed_guess_times.iter().sum();
-    let total_times = total_times as f64;
-    let average = if mode.succeed_guess_times.len() != 0 {
-        (total_times / round_times) as f64
+    let mut succeed_rounds: f64 = 0.0;
+    let mut succeed_total_guess_times: f64 = 0.0;
+    let mut word_guessed_freq: Vec<(String, i32)> = vec![];
+
+    // println!("{}", serde_json::to_string_pretty(&mode.state).unwrap());
+    for temp in &mode.state.games {
+        if temp.guesses.contains(&temp.answer) {
+            succeed_rounds += 1.0;
+            succeed_total_guess_times += (temp.guesses.len() as f64);
+        }
+        for guess in &temp.guesses {
+            add_guessed_word(&mut word_guessed_freq, &guess);
+        }
+    }
+    //lines before state defined
+    // let total_times = total_times as f64;
+    let average = if succeed_rounds != 0.0 {
+        succeed_total_guess_times / succeed_rounds
     } else { 0.00 };
-    println!("{} {} {:.2}", mode.succeeded_game, mode.failed_game, average);
-    mode.word_guessed_freq.sort_by(|a, b| match b.1.cmp(&a.1) {
+    println!("{:.0} {} {:.2}", succeed_rounds, mode.state.total_rounds - succeed_rounds as i32, average);
+    word_guessed_freq.sort_by(|a, b| match b.1.cmp(&a.1) {
         Ordering::Greater | Ordering::Less => b.1.cmp(&a.1),
         Ordering::Equal => a.0.cmp(&b.0)
     });
-    let show_limit: i32 = if mode.word_guessed_freq.len() < 5 {
-        mode.word_guessed_freq.len() as i32
+    let show_limit: i32 = if word_guessed_freq.len() < 5 {
+        word_guessed_freq.len() as i32
     } else { 5 };
     let mut i = 1;
-    for temp in &mode.word_guessed_freq {
+    for temp in &word_guessed_freq {
         // println!("{}",show_limit);
         // println!("{}",i);
         if i == show_limit {
@@ -186,7 +198,6 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
                         is_success = true;
                         print_alphabet(is_tty, &mut alphabet_color);
                         println!("{} {}", error.to_string(), guess_times);
-                        mode.succeed_guess_times.push(guess_times);
                         break;
                     }
                     Error::InvalidArgs => {}
@@ -199,10 +210,9 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
         }
     }
     // println!("{:?}",word_guessed_this_round);
-    if mode.is_stated && mode.is_random {
-        mode.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
-        mode.state.total_rounds += 1;
-    }
+    mode.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
+    mode.state.total_rounds += 1;
+
     if !is_success {
         mode.failed_game += 1;
         if is_tty {
@@ -306,7 +316,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                         }
                     }
                     "-S" | "--state" => {
-                        mode.is_stated=true;
+                        mode.is_stated = true;
                         mode.state_path = std::env::args().nth(num_args + 1).expect("did not input word");
                         if let Ok(state_string) = fs::read_to_string(&mode.state_path) {
                             // println!("{}", mode.state_path);
@@ -387,7 +397,6 @@ fn match_result(guess_word: &String,
         //letters in wrong position must be used
     }
     //Here, the input is finally valid enough
-    mode.add_guessed_word(&guess_word);
     let mut word_result: Vec<Color> = vec![];
     let mut char_to_ignore: Vec<i32> = vec![];
     for i in 0..WORDLE_LENS as i32 {
@@ -465,7 +474,6 @@ fn guess_1(word_to_guess: &String,
     let mut word = String::new();
     io::stdin().read_line(&mut word).expect("cannot read");
     word.pop();
-    //TODO: add verification in different mode
     for i in &mode.acceptable_set {
         if word == i.to_string() {
             word_guessed_this_round.push(word.clone().to_ascii_uppercase());
@@ -500,8 +508,6 @@ struct Mode {
     is_stated: bool,
     succeeded_game: i32,
     failed_game: i32,
-    word_guessed_freq: Vec<(String, i32)>,
-    succeed_guess_times: Vec<i32>,
     words_appeared: Vec<String>,
     day: i32,
     seed: u64,
@@ -557,17 +563,15 @@ impl Error {
     }
 }
 
-impl Mode {
-    fn add_guessed_word(&mut self, word: &String) {
-        let mut contain = false;
-        for temp in &mut self.word_guessed_freq {
-            if temp.0 == *word {
-                temp.1 += 1;
-                contain = true
-            }
+fn add_guessed_word(freq_list: &mut Vec<(String, i32)>, word: &String) {
+    let mut contain = false;
+    for temp in freq_list.iter_mut() {
+        if temp.0 == *word {
+            temp.1 += 1;
+            contain = true
         }
-        if !contain {
-            self.word_guessed_freq.push((word.clone(), 1))
-        }
+    }
+    if !contain {
+        freq_list.push((word.clone(), 1))
     }
 }
