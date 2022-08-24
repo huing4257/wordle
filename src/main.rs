@@ -377,7 +377,8 @@ fn match_result(guess_word: &String,
                 word_to_guess: &String,
                 alphabet: &mut Vec<Color>,
                 mode: &mut Mode,
-                already_guessed_position: &mut Vec<(i32, char)>, ) -> Result<(), Error> {
+                already_guessed_position: &mut Vec<(i32, char)>,
+                word_guessed_this_round:& mut Vec<String>) -> Result<(), Error> {
     // Calculate the color, print a string of 5 letters, and return updated alphabet_color
     // First find G, ignore them, then match last letters one by one (first 5 letters)
     // For alphabet, use a vec of 5 to record the condition of 5 letters
@@ -397,6 +398,7 @@ fn match_result(guess_word: &String,
         //letters in wrong position must be used
     }
     //Here, the input is finally valid enough
+    word_guessed_this_round.push(guess_word.clone().to_ascii_uppercase());
     let mut word_result: Vec<Color> = vec![];
     let mut char_to_ignore: Vec<i32> = vec![];
     for i in 0..WORDLE_LENS as i32 {
@@ -476,8 +478,7 @@ fn guess_1(word_to_guess: &String,
     word.pop();
     for i in &mode.acceptable_set {
         if word == i.to_string() {
-            word_guessed_this_round.push(word.clone().to_ascii_uppercase());
-            return match_result(&word, word_to_guess, alphabet, mode, already_guessed_position);
+            return match_result(&word, word_to_guess, alphabet, mode, already_guessed_position,word_guessed_this_round);
         }
     }
 
