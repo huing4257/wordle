@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     //initialize alphabet
     let mut word_to_guess = String::new();
-    let mut mode = Mode {
+    let mut info = Info {
         is_random: false,
         is_difficult: false,
         is_word_specified: false,
@@ -69,18 +69,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         state_path: String::new(),
     };
-    //write a struct to save mode
-    mode_analyze(&mut word_to_guess, &mut mode).expect("args error");
+    //write a struct to save info
+    info_analyze(&mut word_to_guess, &mut info).expect("args error");
     let mut is_continue_playing = true;
     //play several times
     while is_continue_playing {
-        match guess_whole(&mut word_to_guess, &mut mode) {
+        match guess_whole(&mut word_to_guess, &mut info) {
             Ok(()) => {}
             Err(err) => println!("{}", err.to_string())
         }
-        //if in --word mode, break
-        if mode.is_word_specified {
+        //if in --word info, break
+        if info.is_word_specified {
             break;
+        }
+        if info.is_stats {
+            print_stats(&mut info);
         }
         //judge if continue
         let mut choice: Option<bool> = None;
@@ -105,26 +108,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         is_continue_playing = choice.unwrap();
-        if mode.is_stats {
-            print_stats(&mut mode);
-        }
     }
     //update state file
-    if mode.is_stated && mode.is_random {
-        let state_string = serde_json::to_string_pretty(&mode.state).unwrap();
-        fs::write(mode.state_path, state_string).unwrap();
+    if info.is_stated && info.is_random {
+        let state_string = serde_json::to_string_pretty(&info.state).unwrap();
+        fs::write(info.state_path, state_string).unwrap();
     }
     Ok(())
 }
 
 
-fn print_stats(mode: &mut Mode) {
+fn print_stats(info: &mut Info) {
     let mut succeed_rounds: f64 = 0.0;
     let mut succeed_total_guess_times: f64 = 0.0;
     let mut word_guessed_freq: Vec<(String, i32)> = vec![];
 
-    // println!("{}", serde_json::to_string_pretty(&mode.state).unwrap());
-    for temp in &mode.state.games {
+    // println!("{}", serde_json::to_string_pretty(&info.state).unwrap());
+    for temp in &info.state.games {
         if temp.guesses.contains(&temp.answer) {
             succeed_rounds += 1.0;
             succeed_total_guess_times += temp.guesses.len() as f64;
@@ -136,7 +136,7 @@ fn print_stats(mode: &mut Mode) {
     let average = if succeed_rounds != 0.0 {
         succeed_total_guess_times / succeed_rounds
     } else { 0.00 };
-    println!("{:.0} {} {:.2}", succeed_rounds, mode.state.total_rounds - succeed_rounds as i32, average);
+    println!("{:.0} {} {:.2}", succeed_rounds, info.state.total_rounds - succeed_rounds as i32, average);
     word_guessed_freq.sort_by(|a, b| match b.1.cmp(&a.1) {
         Ordering::Greater | Ordering::Less => b.1.cmp(&a.1),
         Ordering::Equal => a.0.cmp(&b.0)
@@ -157,10 +157,10 @@ fn print_stats(mode: &mut Mode) {
     }
 }
 
-fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<(), Error> {
+fn guess_whole(mut word_to_guess: &mut String, mut info: &mut Info) -> Result<(), Error> {
     //do guess loop, and decide word to guess for each
     let is_tty = atty::is(atty::Stream::Stdout);
-    let game_time = mode.failed_game + mode.succeeded_game;
+    let game_time = info.failed_game + info.succeeded_game;
     let mut is_success: bool = false;
     let mut guess_times = 0;
     let mut already_guessed: Vec<(i32, char)> = vec![];
@@ -170,18 +170,18 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
         let temp = Color::X;
         alphabet_color.push(temp);
     }
-    if mode.is_random {
-        let start_day = game_time + mode.day - 1;//cause do not exist day0
+    if info.is_random {
+        let start_day = game_time + info.day - 1;//cause do not exist day0
         loop {
-            *word_to_guess = mode.final_set.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
-            if !mode.words_appeared.contains(&word_to_guess) {
+            *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
+            if !info.words_appeared.contains(&word_to_guess) {
                 break;
             } else {
-                *word_to_guess = mode.final_set.iter().nth(mode.shuffled_seq[start_day as usize]).unwrap().to_string();
+                *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
             }
         }
-        mode.words_appeared.push(word_to_guess.clone());
-    } else if !mode.is_word_specified {
+        info.words_appeared.push(word_to_guess.clone());
+    } else if !info.is_word_specified {
         word_to_guess.clear();
         io::stdin().read_line(&mut word_to_guess).unwrap();
         word_to_guess.pop();
@@ -191,7 +191,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
     while guess_times <= 5 {
         // println!("{}",guess_times);
         //Guess 6 times
-        match guess_1(&word_to_guess, &mut alphabet_color, &mut mode, &mut already_guessed, &mut word_guessed_this_round) {
+        match guess_1(&word_to_guess, &mut alphabet_color, &mut info, &mut already_guessed, &mut word_guessed_this_round) {
             Err(error) => {
                 match error {
                     Error::InvalidWord => { println!("{}", error.to_string()) }
@@ -212,11 +212,11 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
         }
     }
     // println!("{:?}",word_guessed_this_round);
-    mode.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
-    mode.state.total_rounds += 1;
+    info.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
+    info.state.total_rounds += 1;
 
     if !is_success {
-        mode.failed_game += 1;
+        info.failed_game += 1;
         if is_tty {
             println!(
                 "{} {}",
@@ -227,12 +227,12 @@ fn guess_whole(mut word_to_guess: &mut String, mut mode: &mut Mode) -> Result<()
             println!("FAILED {}", word_to_guess.to_ascii_uppercase());
         }
     } else {
-        mode.succeeded_game += 1
+        info.succeeded_game += 1
     }
     return Ok(());
 }
 
-fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error> {
+fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error> {
     let mut num_args = 0;
     //loop to analyze args
     //first load config
@@ -247,7 +247,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                         let config_string = fs::read_to_string(&config_path).expect("config file error");
                         let config: serde_json::Value = serde_json::from_str(&config_string).expect("config file error");
                         // println!("TEST1");
-                        mode.load_config(word_to_guess,&config);
+                        info.load_config(word_to_guess,&config);
                         // println!("TEST2");
                         // println!("{}",serde_json::to_string_pretty(&config).unwrap());
                     }
@@ -266,10 +266,10 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
             Some(arg) => {
                 match &arg[..] {
                     "-f" | "--final-set" => {
-                        mode.final_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        info.final_path = std::env::args().nth(num_args + 1).expect("did not input word");
                     }
                     "-a" | "--acceptable-set" => {
-                        mode.acceptable_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        info.acceptable_path = std::env::args().nth(num_args + 1).expect("did not input word");
                     }
                     _ => {}
                 }
@@ -278,16 +278,16 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
         num_args += 1;
     }
     // println!("TEST point2");
-    if !mode.final_path.is_empty() {
-        set_from_path(&mode.final_path, &mut mode.final_set);
+    if !info.final_path.is_empty() {
+        set_from_path(&info.final_path, &mut info.final_set);
     }
-    if !mode.acceptable_path.is_empty() {
-        set_from_path(&mode.acceptable_path, &mut mode.acceptable_set);
+    if !info.acceptable_path.is_empty() {
+        set_from_path(&info.acceptable_path, &mut info.acceptable_set);
     }
     //verify specified sets' contain relationship
     let mut is_contain: bool = true;
-    for temp in &mode.final_set {
-        if !mode.acceptable_set.contains(&temp) {
+    for temp in &info.final_set {
+        if !info.acceptable_set.contains(&temp) {
             is_contain = false;
         }
     }
@@ -306,38 +306,38 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
 
                 match &arg[..] {
                     "-w" | "--word" => {
-                        mode.is_word_specified = true;
+                        info.is_word_specified = true;
                         *word_to_guess = std::env::args().nth(num_args + 1).expect("did not input word");
                     }
                     "-r" | "--random" => {
-                        mode.is_random = true
+                        info.is_random = true
                     }
                     "-D" | "--difficult" => {
-                        mode.is_difficult = true
+                        info.is_difficult = true
                     }
                     "-t" | "--stats" => {
-                        mode.is_stats = true
+                        info.is_stats = true
                     }
                     "-d" | "--day" => {
-                        mode.is_special_day = true;
-                        mode.day =
+                        info.is_special_day = true;
+                        info.day =
                             std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
                     }
                     "-s" | "--seed" => {
-                        mode.is_seeded = true;
-                        mode.seed =
-                            std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
+                        info.is_seeded = true;
+                        info.seed =
+                            std::env::args().nth(num_args + 1).expect("did not input seed").parse().unwrap();
 
                     }
                     "-S" | "--state" => {
-                        mode.is_stated = true;
-                        mode.state_path = std::env::args().nth(num_args + 1).expect("did not input word");
-                        if let Ok(state_string) = fs::read_to_string(&mode.state_path) {
-                            // println!("{}", mode.state_path);
+                        info.is_stated = true;
+                        info.state_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        if let Ok(state_string) = fs::read_to_string(&info.state_path) {
+                            // println!("{}", info.state_path);
                             // let mut s = String::new();
                             // io::stdin().read_line(&mut s).unwrap();
                             if state_string != "{}" {
-                                mode.state = match serde_json::from_str(&state_string) {
+                                info.state = match serde_json::from_str(&state_string) {
                                     Ok(x) => x,
                                     Err(_) => {
                                         println!("cannot match");
@@ -354,22 +354,22 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
         num_args += 1;
     }
 
-    if mode.is_seeded{
-        mode.shuffled_seq = {
-            let mut temp: Vec<usize> = (0..mode.final_set.len()).collect();
-            let mut rng: StdRng = SeedableRng::seed_from_u64(mode.seed);
+    if info.is_seeded{
+        info.shuffled_seq = {
+            let mut temp: Vec<usize> = (0..info.final_set.len()).collect();
+            let mut rng: StdRng = SeedableRng::seed_from_u64(info.seed);
             temp.shuffle(&mut rng);
             temp
         }
     }
     //deal with conflict args
-    if mode.is_random {
-        if mode.is_word_specified {
+    if info.is_random {
+        if info.is_word_specified {
             return Err(Error::InvalidArgs);
         }
     }
-    if mode.is_word_specified {
-        if mode.is_seeded && mode.is_special_day {
+    if info.is_word_specified {
+        if info.is_seeded && info.is_special_day {
             return Err(Error::InvalidArgs);
         }
     }
@@ -399,13 +399,13 @@ fn print_alphabet(is_tty: bool, alphabet_color: &Vec<Color>) {
 fn match_result(guess_word: &String,
                 word_to_guess: &String,
                 alphabet: &mut Vec<Color>,
-                mode: &mut Mode,
+                info: &mut Info,
                 already_guessed_position: &mut Vec<(i32, char)>,
                 word_guessed_this_round: &mut Vec<String>) -> Result<(), Error> {
     // Calculate the color, print a string of 5 letters, and return updated alphabet_color
     // First find G, ignore them, then match last letters one by one (first 5 letters)
     // For alphabet, use a vec of 5 to record the condition of 5 letters
-    if mode.is_difficult {
+    if info.is_difficult {
         for temp in already_guessed_position.iter() {
             if guess_word.chars().nth(temp.0 as usize).unwrap() != temp.1 {
                 return Err(Error::InvalidWord);
@@ -454,7 +454,8 @@ fn match_result(guess_word: &String,
         }
     }
     for i in 0..WORDLE_LENS {
-        if atty::is(atty::Stream::Stdout) {
+        let is_tty = atty::is(atty::Stream::Stdout);
+        if is_tty {
             print!("{}",
                    match word_result[i] {
                        Color::Y => console::style(guess_word.chars().nth(i).unwrap()).yellow(),
@@ -491,7 +492,7 @@ fn match_result(guess_word: &String,
 
 fn guess_1(word_to_guess: &String,
            alphabet: &mut Vec<Color>,
-           mode: &mut Mode,
+           info: &mut Info,
            already_guessed_position: &mut Vec<(i32, char)>,
            word_guessed_this_round: &mut Vec<String>) -> Result<(), Error> {
     //Do guess operation once, and return updated alphabet_color, if input invalid, return and try this
@@ -499,9 +500,9 @@ fn guess_1(word_to_guess: &String,
     let mut word = String::new();
     io::stdin().read_line(&mut word).expect("cannot read");
     word.pop();
-    for i in &mode.acceptable_set {
+    for i in &info.acceptable_set {
         if word == i.to_string() {
-            return match_result(&word, word_to_guess, alphabet, mode, already_guessed_position, word_guessed_this_round);
+            return match_result(&word, word_to_guess, alphabet, info, already_guessed_position, word_guessed_this_round);
         }
     }
 
@@ -521,7 +522,7 @@ struct State {
 }
 
 
-struct Mode {
+struct Info {
     is_difficult: bool,
     is_random: bool,
     is_word_specified: bool,
@@ -543,7 +544,7 @@ struct Mode {
     state_path: String,
 }
 
-impl Mode {
+impl Info {
     fn load_config(&mut self,word_to_guess:&mut String,config: &serde_json::Value) {
         if let Some(is_random) = config.get("random") {
             self.is_random = is_random.as_bool().expect("config file error");

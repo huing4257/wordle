@@ -10,7 +10,6 @@ atty = "0.2"
 serde_json = "1.0"
 console = "0.15"
 rand = "0.8.0"
-rand_core = "0.6.3"
 serde = { version = "1.0.126", features = ["derive"] }
 
 
