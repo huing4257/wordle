@@ -98,7 +98,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match &whether_another[..] {
                 "Y" => choice = Some(true),
                 "N" => choice = Some(false),
-                _ => println!("INVALID")
+                "" => choice = Some(false),
+                _ => {
+                    println!("INVALID")
+                }
             }
         }
         is_continue_playing = choice.unwrap();
