@@ -12,7 +12,6 @@ use serde_json;
 use crate::builtin_words::{FINAL, ACCEPTABLE};
 
 pub const WORDLE_LENS: usize = 5;
-/// The main function for the Wordle game, implement your own logic here
 pub const ALPHABET: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
 
@@ -117,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
+/// Receive info, print statistics of guesses
 fn print_stats(info: &mut Info) {
     let mut succeed_rounds: f64 = 0.0;
     let mut succeed_total_guess_times: f64 = 0.0;
@@ -157,81 +156,8 @@ fn print_stats(info: &mut Info) {
     }
 }
 
-fn guess_whole(mut word_to_guess: &mut String, mut info: &mut Info) -> Result<(), Error> {
-    //do guess loop, and decide word to guess for each
-    let is_tty = atty::is(atty::Stream::Stdout);
-    let game_time = info.failed_game + info.succeeded_game;
-    let mut is_success: bool = false;
-    let mut guess_times = 0;
-    let mut already_guessed: Vec<(i32, char)> = vec![];
-    let mut alphabet_color: Vec<Color> = vec![];
-    let mut word_guessed_this_round: Vec<String> = vec![];
-    for _i in 0..26 {
-        let temp = Color::X;
-        alphabet_color.push(temp);
-    }
-    if info.is_random {
-        let start_day = game_time + info.day - 1;//cause do not exist day0
-        loop {
-            *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
-            if !info.words_appeared.contains(&word_to_guess) {
-                break;
-            } else {
-                *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
-            }
-        }
-        info.words_appeared.push(word_to_guess.clone());
-    } else if !info.is_word_specified {
-        word_to_guess.clear();
-        io::stdin().read_line(&mut word_to_guess).unwrap();
-        word_to_guess.pop();
-    }
-    *word_to_guess = word_to_guess.to_ascii_lowercase();
-    // println!("{}",word_to_guess);
-    while guess_times <= 5 {
-        // println!("{}",guess_times);
-        //Guess 6 times
-        match guess_1(&word_to_guess, &mut alphabet_color, &mut info, &mut already_guessed, &mut word_guessed_this_round) {
-            Err(error) => {
-                match error {
-                    Error::InvalidWord => { println!("{}", error.to_string()) }
-                    Error::AlreadyCorrect => {
-                        guess_times += 1;
-                        is_success = true;
-                        print_alphabet(is_tty, &mut alphabet_color);
-                        println!("{} {}", error.to_string(), guess_times);
-                        break;
-                    }
-                    Error::InvalidArgs => {}
-                }
-            }
-            Ok(_ok) => {
-                guess_times += 1;
-                print_alphabet(is_tty, &mut alphabet_color);
-            }
-        }
-    }
-    // println!("{:?}",word_guessed_this_round);
-    info.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
-    info.state.total_rounds += 1;
-
-    if !is_success {
-        info.failed_game += 1;
-        if is_tty {
-            println!(
-                "{} {}",
-                console::style("FAILED").red(),
-                console::style(word_to_guess.to_ascii_uppercase()).green().italic()
-            );
-        } else {
-            println!("FAILED {}", word_to_guess.to_ascii_uppercase());
-        }
-    } else {
-        info.succeeded_game += 1
-    }
-    return Ok(());
-}
-
+/// Analyze args to change info
+/// Return a result with Error, invalid input or args
 fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error> {
     let mut num_args = 0;
     //loop to analyze args
@@ -247,7 +173,7 @@ fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error
                         let config_string = fs::read_to_string(&config_path).expect("config file error");
                         let config: serde_json::Value = serde_json::from_str(&config_string).expect("config file error");
                         // println!("TEST1");
-                        info.load_config(word_to_guess,&config);
+                        info.load_config(word_to_guess, &config);
                         // println!("TEST2");
                         // println!("{}",serde_json::to_string_pretty(&config).unwrap());
                     }
@@ -255,7 +181,7 @@ fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error
                 }
             }
         }
-        num_args+=1;
+        num_args += 1;
     }
     //next decide sets
     let mut num_args = 0;
@@ -327,7 +253,6 @@ fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error
                         info.is_seeded = true;
                         info.seed =
                             std::env::args().nth(num_args + 1).expect("did not input seed").parse().unwrap();
-
                     }
                     "-S" | "--state" => {
                         info.is_stated = true;
@@ -354,7 +279,7 @@ fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error
         num_args += 1;
     }
 
-    if info.is_seeded{
+    if info.is_seeded {
         info.shuffled_seq = {
             let mut temp: Vec<usize> = (0..info.final_set.len()).collect();
             let mut rng: StdRng = SeedableRng::seed_from_u64(info.seed);
@@ -376,7 +301,91 @@ fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error
     Ok(())
 }
 
-fn print_alphabet(is_tty: bool, alphabet_color: &Vec<Color>) {
+/// Receives the word to guess this round, then starts a round of game
+/// Return a result with Error
+fn guess_whole(mut word_to_guess: &mut String, mut info: &mut Info) -> Result<(), Error> {
+    let is_tty = atty::is(atty::Stream::Stdout);
+    let game_time = info.failed_game + info.succeeded_game;
+    let mut is_success: bool = false;
+    let mut guess_times = 0;
+    let mut round_info = RoundInfo {
+        already_guessed_position: vec![],
+        alphabet_color: vec![],
+        word_guessed_this_round: vec![],
+    };
+    let mut already_guessed_position: Vec<(i32, char)> = vec![];
+    let mut alphabet_color: Vec<Color> = vec![];
+    let mut word_guessed_this_round: Vec<String> = vec![];
+    for _i in 0..26 {
+        let temp = Color::X;
+        round_info.alphabet_color.push(temp);
+    }
+    if info.is_random {
+        let start_day = game_time + info.day - 1;//cause do not exist day0
+        loop {
+            *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
+            if !info.words_appeared.contains(&word_to_guess) {
+                break;
+            } else {
+                *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
+            }
+        }
+        info.words_appeared.push(word_to_guess.clone());
+    } else if !info.is_word_specified {
+        word_to_guess.clear();
+        io::stdin().read_line(&mut word_to_guess).unwrap();
+        word_to_guess.pop();
+    }
+    *word_to_guess = word_to_guess.to_ascii_lowercase();
+    // println!("{}",word_to_guess);
+    while guess_times <= 5 {
+        //Guess 6 times
+        match guess_1( word_to_guess, &mut info, &mut round_info) {
+            Err(error) => {
+                match error {
+                    Error::InvalidWord => { println!("{}", error.to_string()) }
+                    Error::AlreadyCorrect => {
+                        guess_times += 1;
+                        is_success = true;
+                        print_alphabet(&mut round_info.alphabet_color);
+                        println!("{} {}", error.to_string(), guess_times);
+                        break;
+                    }
+                    Error::InvalidArgs => {}
+                }
+            }
+            Ok(_) => {
+                guess_times += 1;
+                print_alphabet(&mut round_info.alphabet_color);
+            }
+        }
+    }
+    // println!("{:?}",word_guessed_this_round);
+    info.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
+    info.state.total_rounds += 1;
+
+    if !is_success {
+        info.failed_game += 1;
+        if is_tty {
+            println!(
+                "{} {}",
+                console::style("FAILED").red(),
+                console::style(word_to_guess.to_ascii_uppercase()).green().italic()
+            );
+        } else {
+            println!("FAILED {}", word_to_guess.to_ascii_uppercase());
+        }
+    } else {
+        info.succeeded_game += 1
+    }
+    return Ok(());
+}
+
+
+/// Receives a vector of 26 color strings and print
+/// If in tty, print letters, else just print color
+fn print_alphabet(alphabet_color: &Vec<Color>) {
+    let is_tty = atty::is(atty::Stream::Stdout);
     if is_tty {
         for i in 0..26 {
             print!("{}",
@@ -396,23 +405,22 @@ fn print_alphabet(is_tty: bool, alphabet_color: &Vec<Color>) {
     println!();
 }
 
+
 fn match_result(guess_word: &String,
-                word_to_guess: &String,
-                alphabet: &mut Vec<Color>,
+                word_to_guess:& mut String,
                 info: &mut Info,
-                already_guessed_position: &mut Vec<(i32, char)>,
-                word_guessed_this_round: &mut Vec<String>) -> Result<(), Error> {
+                round_info: &mut RoundInfo) -> Result<(), Error> {
     // Calculate the color, print a string of 5 letters, and return updated alphabet_color
     // First find G, ignore them, then match last letters one by one (first 5 letters)
     // For alphabet, use a vec of 5 to record the condition of 5 letters
     if info.is_difficult {
-        for temp in already_guessed_position.iter() {
+        for temp in round_info.already_guessed_position.iter() {
             if guess_word.chars().nth(temp.0 as usize).unwrap() != temp.1 {
                 return Err(Error::InvalidWord);
             }
         }//letters already correct cannot change
         for i in 0..26 {
-            if let Color::Y = alphabet[i] {
+            if let Color::Y = round_info.alphabet_color[i] {
                 if !guess_word.contains(ALPHABET[i]) {
                     return Err(Error::InvalidWord);
                 }
@@ -421,13 +429,13 @@ fn match_result(guess_word: &String,
         //letters in wrong position must be used
     }
     //Here, the input is finally valid enough
-    word_guessed_this_round.push(guess_word.clone().to_ascii_uppercase());
+    round_info.word_guessed_this_round.push(guess_word.clone().to_ascii_uppercase());
     let mut word_result: Vec<Color> = vec![];
     let mut char_to_ignore: Vec<i32> = vec![];
     for i in 0..WORDLE_LENS as i32 {
         if guess_word.chars().nth(i as usize) == word_to_guess.chars().nth(i as usize) {
             char_to_ignore.push(i);
-            already_guessed_position.push((i, guess_word.chars().nth(i as usize).unwrap()))
+            round_info.already_guessed_position.push((i, guess_word.chars().nth(i as usize).unwrap()))
         }
     }
     // println!("{:?}", char_to_ignore);
@@ -479,9 +487,9 @@ fn match_result(guess_word: &String,
         for j in 0..WORDLE_LENS {
             if ALPHABET[i] == guess_word.chars().nth(j).unwrap() {
                 if color_grade.get(
-                    &alphabet[i].to_string()) < color_grade.get(&word_result[j].to_string()
+                    &round_info.alphabet_color[i].to_string()) < color_grade.get(&word_result[j].to_string()
                 ) {
-                    alphabet[i] = word_result[j].clone();
+                    round_info.alphabet_color[i] = word_result[j].clone();
                 }
             }
         }
@@ -490,11 +498,11 @@ fn match_result(guess_word: &String,
     return Ok(());
 }
 
-fn guess_1(word_to_guess: &String,
-           alphabet: &mut Vec<Color>,
-           info: &mut Info,
-           already_guessed_position: &mut Vec<(i32, char)>,
-           word_guessed_this_round: &mut Vec<String>) -> Result<(), Error> {
+fn guess_1(
+    word_to_guess:& mut String,
+    info: &mut Info,
+    round_info: &mut RoundInfo,
+) -> Result<(), Error> {
     //Do guess operation once, and return updated alphabet_color, if input invalid, return and try this
     //function again.
     let mut word = String::new();
@@ -502,7 +510,7 @@ fn guess_1(word_to_guess: &String,
     word.pop();
     for i in &info.acceptable_set {
         if word == i.to_string() {
-            return match_result(&word, word_to_guess, alphabet, info, already_guessed_position, word_guessed_this_round);
+            return match_result(&word, word_to_guess, info, round_info);
         }
     }
 
@@ -520,7 +528,6 @@ struct State {
     total_rounds: i32,
     games: Vec<Game>,
 }
-
 
 struct Info {
     is_difficult: bool,
@@ -544,8 +551,15 @@ struct Info {
     state_path: String,
 }
 
+struct RoundInfo {
+    already_guessed_position: Vec<(i32, char)>,
+    alphabet_color: Vec<Color>,
+    word_guessed_this_round: Vec<String>
+}
+
+
 impl Info {
-    fn load_config(&mut self,word_to_guess:&mut String,config: &serde_json::Value) {
+    fn load_config(&mut self, word_to_guess: &mut String, config: &serde_json::Value) {
         if let Some(is_random) = config.get("random") {
             self.is_random = is_random.as_bool().expect("config file error");
         }
@@ -580,7 +594,7 @@ impl Info {
         }
         if let Some(word) = config.get("word") {
             self.is_word_specified = true;
-            *word_to_guess=word.as_str().expect("config file error").to_string();
+            *word_to_guess = word.as_str().expect("config file error").to_string();
         }
     }
 }
