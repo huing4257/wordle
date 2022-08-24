@@ -124,7 +124,7 @@ fn print_stats(mode: &mut Mode) {
     for temp in &mode.state.games {
         if temp.guesses.contains(&temp.answer) {
             succeed_rounds += 1.0;
-            succeed_total_guess_times += (temp.guesses.len() as f64);
+            succeed_total_guess_times += temp.guesses.len() as f64;
         }
         for guess in &temp.guesses {
             add_guessed_word(&mut word_guessed_freq, &guess);
@@ -243,7 +243,10 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                         let config_path = std::env::args().nth(num_args + 1).expect("did not input word");
                         let config_string = fs::read_to_string(&config_path).expect("config file error");
                         let config: serde_json::Value = serde_json::from_str(&config_string).expect("config file error");
+                        // println!("TEST1");
                         mode.load_config(word_to_guess,&config);
+                        // println!("TEST2");
+                        // println!("{}",serde_json::to_string_pretty(&config).unwrap());
                     }
                     _ => {}
                 }
@@ -271,6 +274,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
         }
         num_args += 1;
     }
+    // println!("TEST point2");
     if !mode.final_path.is_empty() {
         set_from_path(&mode.final_path, &mut mode.final_set);
     }
@@ -287,6 +291,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
     if !is_contain {
         return Err(Error::InvalidArgs);
     }
+    // println!("ser valid");
     let mut num_args = 0;
     loop {
         //loop to analyze args
@@ -319,12 +324,7 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
                         mode.is_seeded = true;
                         mode.seed =
                             std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
-                        mode.shuffled_seq = {
-                            let mut temp: Vec<usize> = (0..mode.final_set.len()).collect();
-                            let mut rng: StdRng = SeedableRng::seed_from_u64(mode.seed);
-                            temp.shuffle(&mut rng);
-                            temp
-                        }
+
                     }
                     "-S" | "--state" => {
                         mode.is_stated = true;
@@ -349,6 +349,15 @@ fn mode_analyze(word_to_guess: &mut String, mode: &mut Mode) -> Result<(), Error
             }
         }
         num_args += 1;
+    }
+
+    if mode.is_seeded{
+        mode.shuffled_seq = {
+            let mut temp: Vec<usize> = (0..mode.final_set.len()).collect();
+            let mut rng: StdRng = SeedableRng::seed_from_u64(mode.seed);
+            temp.shuffle(&mut rng);
+            temp
+        }
     }
     //deal with conflict args
     if mode.is_random {
@@ -508,17 +517,6 @@ struct State {
     games: Vec<Game>,
 }
 
-struct Config {
-    random: bool,
-    difficult: bool,
-    stats: bool,
-    day: i32,
-    seed: usize,
-    final_set: String,
-    acceptable_set: String,
-    state: String,
-    word: String,
-}
 
 struct Mode {
     is_difficult: bool,
@@ -559,7 +557,7 @@ impl Mode {
         }
         if let Some(seed) = config.get("seed") {
             self.is_seeded = true;
-            self.seed = seed.as_u64().expect("config file error")
+            self.seed = seed.as_u64().expect("config file error");
         }
         if let Some(final_set_path) = config.get("final_set") {
             self.final_path = final_set_path.as_str().expect("config file error").to_string();
