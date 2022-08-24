@@ -312,11 +312,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut info: &mut Info) -> Result<()
         already_guessed_position: vec![],
         alphabet_color: vec![],
         word_guessed_this_round: vec![],
-    };
-    let mut already_guessed_position: Vec<(i32, char)> = vec![];
-    let mut alphabet_color: Vec<Color> = vec![];
-    let mut word_guessed_this_round: Vec<String> = vec![];
-    for _i in 0..26 {
+    };for _i in 0..26 {
         let temp = Color::X;
         round_info.alphabet_color.push(temp);
     }
@@ -361,7 +357,7 @@ fn guess_whole(mut word_to_guess: &mut String, mut info: &mut Info) -> Result<()
         }
     }
     // println!("{:?}",word_guessed_this_round);
-    info.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: word_guessed_this_round });
+    info.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: round_info.word_guessed_this_round });
     info.state.total_rounds += 1;
 
     if !is_success {
