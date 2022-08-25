@@ -1,10 +1,11 @@
+mod builtin_words;
 use std::collections::HashMap;
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
 use std::{fs, io};
 use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
-use crate::builtin_words::{ACCEPTABLE, FINAL};
+use builtin_words::{ACCEPTABLE, FINAL};
 pub const WORDLE_LENS: usize = 5;
 pub const ALPHABET: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
@@ -638,7 +639,7 @@ pub enum Color {
 }
 
 impl Color {
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         return match &self {
             Color::R => { "R".to_string() }
             Color::Y => { "Y".to_string() }
@@ -646,7 +647,7 @@ impl Color {
             Color::X => { "X".to_string() }
         };
     }
-    fn clone(&self) -> Color {
+    pub fn clone(&self) -> Color {
         match self {
             Color::R => { Color::R }
             Color::Y => { Color::Y }

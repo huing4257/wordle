@@ -25,4 +25,6 @@ pretty_assertions = "1.2.1"
 [[bin]]
 name="gui"
 
-
+[lib]
+name = "func"
+path = "src/func.rs"

@@ -1,5 +1,5 @@
 mod builtin_words;
-mod func;
+use func;
 
 use std::fs;
 use console;
