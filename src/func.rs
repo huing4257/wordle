@@ -167,12 +167,7 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
     let game_time = info.failed_game + info.succeeded_game;
     let mut is_success: bool = false;
     let mut guess_times = 0;
-    let mut round_info = RoundInfo {
-        already_guessed_position: vec![],
-        alphabet_color: vec![],
-        word_guessed_this_round: vec![],
-        hint_list: info.acceptable_set.clone(),
-    };
+    let mut round_info = RoundInfo::new(& info);
     if is_tty {
         println!("This is round {}, please input your guesses",
                  console::style(info.state.total_rounds+1).green().bold());
@@ -184,14 +179,7 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
     }
     if info.is_random {
         let start_day = game_time + info.day - 1;//cause do not exist day0
-        loop {
-            *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
-            if !info.words_appeared.contains(&word_to_guess) {
-                break;
-            } else {
-                *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
-            }
-        }
+        get_word_by_start_day(&mut word_to_guess, info, start_day);
         info.words_appeared.push(word_to_guess.clone());
     } else if !info.is_word_specified {
         word_to_guess.clear();
@@ -243,6 +231,17 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
         info.succeeded_game += 1
     }
     return Ok(());
+}
+
+pub fn get_word_by_start_day(word_to_guess: &mut  String, info: & Info, start_day: i32) {
+    loop {
+        *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
+        if !info.words_appeared.contains(&word_to_guess) {
+            break;
+        } else {
+            *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
+        }
+    }
 }
 
 /// Take word to guess, info and round info, do guess once.
@@ -533,7 +532,17 @@ pub struct RoundInfo {
     hint_list: Vec<String>,
 }
 
-
+impl RoundInfo {
+    pub fn new(info: & Info) -> RoundInfo {
+        let mut round_info = RoundInfo {
+            already_guessed_position: vec![],
+            alphabet_color: vec![],
+            word_guessed_this_round: vec![],
+            hint_list: info.acceptable_set.clone(),
+        };
+        round_info
+    }
+}
 impl Info {
     pub fn new() ->Info{
         Info {

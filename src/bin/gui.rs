@@ -11,6 +11,8 @@ use fltk::{
     window::{self, Window},
 };
 use func;
+use func::{Info, RoundInfo};
+
 pub const ALPHABET: &[char] = &[
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
     't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -23,6 +25,7 @@ pub const Grey: u32 = 0x787c7f;
 pub const Red: u32 = 0x787c7f;
 pub const Green: u32 = 0x6ca965;
 pub const Yellow: u32 = 0xc8b653;
+
 #[derive(Debug, Copy, Clone)]
 enum Message {
     Letter(char),
@@ -122,10 +125,12 @@ fn main() {
     }
 
     //start game
-    let mut word_to_guess = "crate".to_string();
+    let mut word_to_guess =String::new() ;
+    let mut info=Info::new();
+    let mut round_info=RoundInfo::new(&info);
     let mut guess_word = String::new();
     let mut guess_time: usize = 0;
-
+    func::get_word_by_start_day(&mut word_to_guess,&info,0);
     let (s, r) = app::channel::<Message>();
 
     for mut but in &mut letter_btn {
@@ -136,6 +141,8 @@ fn main() {
     wind.end();
     wind.show();
 
+    
+    
     while app.wait() {
         if let Some(val) = r.recv() {
             match val {
@@ -152,7 +159,6 @@ fn main() {
                 Message::Enter => {
                     println!("enter");
                     reset_up_color(&mut frame_list, &mut word_to_guess, &mut guess_word);
-
                     app.redraw();
                 }
                 Message::Delete => match guess_word.pop() {
