@@ -1,6 +1,10 @@
-use fltk::{app, button::{self, Button}, dialog, enums::{Color, Font, FrameType}, frame::{Frame}, group::{self, PackType}, menu, prelude::*, window::{Window}};
+use std::fmt::Debug;
+use std::fs;
+use fltk::{app, button::{self, Button}, dialog, enums::{Color, Font, FrameType}, frame::{Frame},
+           group::{self, PackType}, menu, prelude::*, window::{Window}};
+use fltk::enums::Shortcut;
 use func;
-use func::{update_round_alphabet_color, Info, RoundInfo};
+use func::{update_round_alphabet_color, Info, RoundInfo, Error, stats_to_string};
 
 pub const ALPHABET: &[char] = &[
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -20,6 +24,11 @@ enum Message {
     Letter(char),
     Enter,
     Delete,
+    Seed,
+    Save,
+    Open,
+    Quit,
+    Show
 }
 
 fn main() {
@@ -36,6 +45,8 @@ fn main() {
         .center_screen();
     wind.set_color(Color::White);
 
+    let (s, r) = app::channel::<Message>();
+
     let mut btn_enter = button::Button::new(50, 610, 70, 50, "@returnarrow");
     btn_enter.set_color(Color::Light2);
     let mut btn_undo = button::Button::new(510, 610, 70, 50, "@undo");
@@ -43,9 +54,47 @@ fn main() {
     let mut char_num = 0;
 
     //create menu
-    let mut menubar = menu::MenuBar::new(0, 0, width, 20, "rew");
-    menubar.set_color(Color::Light2);
-    
+    let mut menubar = menu::MenuBar::new(0, 0, width, 25, "rew");
+    menubar.set_color(Color::Light3);
+    menubar.set_frame(FrameType::FlatBox);
+    menubar.add_emit(
+        "&File/Save\t",
+        Shortcut::Ctrl | 's',
+        menu::MenuFlag::Normal,
+        s,
+        Message::Save,
+    );
+    menubar.add_emit(
+        "&File/Open\t",
+        Shortcut::Ctrl | 'o',
+        menu::MenuFlag::Normal,
+        s,
+        Message::Open,
+    );
+    menubar.add_emit(
+        "&File/Show stats",
+        Shortcut::Shift |'s',
+        menu::MenuFlag::Normal,
+        s,
+        Message::Show
+    );
+    menubar.add_emit(
+        "&File/Quit\t",
+        Shortcut::Ctrl | 'q',
+        menu::MenuFlag::Normal,
+        s,
+        Message::Quit,
+    );
+    menubar.add_emit(
+        "&Settings/Seed...\t",
+        Shortcut::Shift | 's',
+        menu::MenuFlag::Normal,
+        s,
+        Message::Seed,
+    );
+
+
+
     // create show frame
     let mut frame_list: Vec<Frame> = vec![];
     for i in 0..6 {
@@ -124,10 +173,10 @@ fn main() {
     let mut guess_word = String::new();
     let mut guess_count: usize = 0;
     let mut is_good: bool = true;// a condition variable controlled by return
+    let mut args: Vec<String> = vec![];
     func::get_word_by_start_day(&mut word_to_guess, &info, 0);
-    let (s, r) = app::channel::<Message>();
     let mut is_success = false;
-    for  but in &mut letter_btn {
+    for but in &mut letter_btn {
         but.emit(s, Message::Letter(but.label().chars().next().unwrap()))
     }
     btn_enter.emit(s, Message::Enter);
@@ -148,14 +197,14 @@ fn main() {
                         } else {
                             dialog::message(500, 300, "Word already full!");
                         }
-                    }else {
+                    } else {
                         dialog::message(500, 300, "Please click return arrow to reset!");
                     }
                 }
                 Message::Enter => {
                     println!("enter");
 
-                    if is_good{
+                    if is_good {
                         if info.acceptable_set.contains(&guess_word) {
                             let result = func::calculate_color(&word_to_guess, &guess_word);
                             is_success = true;
@@ -178,23 +227,23 @@ fn main() {
                                     }
                                 }
                             }
+                            round_info.word_guessed_this_round.push(guess_word.clone().to_ascii_uppercase());
                             app.redraw();
                             //new guess
                             guess_word.clear();
                             guess_count += 1;
                             if guess_count == 6 {
                                 dialog::message(500, 300, "You failed.Click return arrow to reset.");
-                                is_good=false;
+                                is_good = false;
                             }
                         } else {
                             dialog::message(500, 300, "Word doesn't exist!");
                         }
                         if is_success {
                             dialog::message(500, 300, "You win! Click return arrow to reset ");
-                            is_good=false;
+                            is_good = false;
                         }
-                    }
-                    else   {
+                    } else {
                         let choices = dialog::choice2(
                             500, 300, "Do you want to start a new round?",
                             "Yes", "Cancel", "");
@@ -202,8 +251,8 @@ fn main() {
                             Some(choice) => {
                                 match choice {
                                     0 => {
-                                        is_good=true;
-                                        is_success=false;
+                                        is_good = true;
+                                        is_success = false;
                                         round_info = RoundInfo::new(&info);
                                         for frame in &mut frame_list {
                                             frame.set_color(Color::from_hex(GREY));
@@ -213,32 +262,86 @@ fn main() {
                                             btn.set_color(Color::from_hex(GREY));
                                             btn.redraw();
                                         }
+                                        //update round info
+                                        info.state.games.push(func::Game {
+                                            answer: word_to_guess.clone().to_ascii_uppercase(),
+                                            guesses: round_info.word_guessed_this_round.clone(),
+                                        });
+                                        info.state.total_rounds += 1;
                                         guess_count = 0;
                                         info.day += 1;
                                         word_to_guess =
                                             info.final_set[info.shuffled_seq[info.day as usize]].clone();
                                     }
                                     1 => {
-                                        is_good=false;
+                                        is_good = false;
                                     }
                                     _ => unreachable!()
                                 }
                             }
-                            None => {is_good=false}
+                            None => { is_good = false }
                         }
                     }
                 }
                 Message::Delete => {
-                    if is_good{
+                    if is_good {
                         match guess_word.pop() {
                             Some(_) => {
                                 frame_list[guess_count * 5 + guess_word.len()].set_label("");
                             }
                             None => dialog::message(500, 300, "Word already empty!"),
                         }
-                    }else {
+                    } else {
                         dialog::message(500, 300, "You have won! Please click return arrow.");
                     }
+                }
+                Message::Seed => {
+                    let seed = dialog::input(
+                        500, 300, "Start game with a random seed:", "");
+                    args.push("--seed".to_string());
+                    if let Some(s) = seed {
+                        args.push(s);
+                        match func::info_analyze(&mut word_to_guess, &mut info, &args) {
+                            Ok(_) => {
+                                round_info = RoundInfo::new(&info);
+                                func::get_word_by_start_day(&mut word_to_guess, &info, 0);
+                            }
+                            Err(err) => {
+                                dialog::message(500, 300, &err.to_string());
+                            }
+                        }
+                    }
+                }
+                Message::Save => {
+                    let mut saving = dialog::NativeFileChooser::new(
+                        dialog::NativeFileChooserType::BrowseSaveFile);
+                    saving.show();
+                    info.state_path = saving.filename().into_os_string().into_string().unwrap();
+                    let state_string = serde_json::to_string_pretty(&info.state).unwrap();
+                    fs::write(saving.filename(), state_string).unwrap();
+                }
+                Message::Open => {
+                    let mut saving = dialog::NativeFileChooser::new(
+                        dialog::NativeFileChooserType::BrowseSaveFile);
+                    saving.show();
+                    let state_path = saving.filename().into_os_string().into_string().unwrap();
+                    args.push("-s".to_string());
+                    args.push(state_path);
+                    func::info_analyze(&mut word_to_guess, &mut info, &args).expect("input error");
+                }
+                Message::Quit => {
+                    if info.state_path.is_empty() {
+                        if let Some(i) = dialog::choice2_default(
+                            "Didn't save, sure to quit?", "No", "yes", "") {
+                            match i {
+                                1 => app.quit(),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                Message::Show => {
+                    dialog::message(500, 300,&stats_to_string(&mut info))
                 }
             }
         }

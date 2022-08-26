@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
         if info.is_stats {
-            func::print_stats(&mut info);
+            println!("{}",func::stats_to_string(&mut info));
         }
         //judge if continue
         let mut choice: Option<bool> = None;

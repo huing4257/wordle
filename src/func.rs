@@ -5,6 +5,8 @@ use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
 use std::{fs, io};
 use std::cmp::Ordering;
+use std::fmt::Display;
+use fltk::enums::Cursor::S;
 use serde::{Deserialize, Serialize};
 use builtin_words::{ACCEPTABLE, FINAL};
 
@@ -16,9 +18,213 @@ pub const RED: u32 = 0x787c7f;
 pub const GREEN: u32 = 0x6ca965;
 pub const YELLOW: u32 = 0xc8b653;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Game {
+    pub answer: String,
+    pub guesses: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct State {
+    pub total_rounds: i32,
+    pub games: Vec<Game>,
+}
+
+pub struct Info {
+    is_difficult: bool,
+    pub is_random: bool,
+    pub is_word_specified: bool,
+    pub is_stats: bool,
+    is_recommend: bool,
+    is_seeded: bool,
+    is_special_day: bool,
+    pub is_stated: bool,
+    is_hint: bool,
+    succeeded_game: i32,
+    failed_game: i32,
+    words_appeared: Vec<String>,
+    pub day: i32,
+    pub seed: u64,
+    pub shuffled_seq: Vec<usize>,
+    final_path: String,
+    acceptable_path: String,
+    pub final_set: Vec<String>,
+    pub acceptable_set: Vec<String>,
+    pub state: State,
+    pub state_path: String,
+}
+
+impl Info {
+    pub fn new() -> Info {
+        Info {
+            is_random: false,
+            is_difficult: false,
+            is_word_specified: false,
+            is_stats: false,
+            is_recommend: false,
+            is_seeded: false,
+            is_special_day: false,
+            is_stated: false,
+            is_hint: false,
+            succeeded_game: 0,
+            failed_game: 0,
+            words_appeared: vec![],
+            day: 1,
+            seed: 0,
+            shuffled_seq: {
+                let mut temp: Vec<usize> = (0..FINAL.len()).collect();
+                let mut rng: StdRng = SeedableRng::seed_from_u64(0);
+                temp.shuffle(&mut rng);
+                temp
+            },
+            final_path: "".to_string(),
+            acceptable_path: "".to_string(),
+            final_set: {
+                let mut a: Vec<String> = vec![];
+                for i in FINAL.iter() {
+                    a.push(i.to_string());
+                };
+                a
+            },
+            acceptable_set: {
+                let mut a: Vec<String> = vec![];
+                for i in ACCEPTABLE {
+                    a.push(i.to_string());
+                };
+                a
+            },
+            state: {
+                State {
+                    total_rounds: 0,
+                    games: vec![],
+                }
+            },
+            state_path: String::new(),
+        }
+    }
+    fn load_config(&mut self, word_to_guess: &mut String, config: &serde_json::Value) {
+        if let Some(is_random) = config.get("random") {
+            self.is_random = is_random.as_bool().expect("config file error");
+        }
+        if let Some(is_difficult) = config.get("difficult") {
+            self.is_difficult = is_difficult.as_bool().expect("config file error");
+        }
+        if let Some(is_stats) = config.get("stats") {
+            self.is_stats = is_stats.as_bool().expect("config file error");
+        }
+        if let Some(day) = config.get("day") {
+            self.is_special_day = true;
+            self.day = day.as_i64().expect("config file error") as i32;
+        }
+        if let Some(seed) = config.get("seed") {
+            self.is_seeded = true;
+            self.seed = seed.as_u64().expect("config file error");
+        }
+        if let Some(final_set_path) = config.get("final_set") {
+            self.final_path = final_set_path.as_str().expect("config file error").to_string();
+        }
+        if let Some(acceptable_path) = config.get("acceptable_set") {
+            self.acceptable_path = acceptable_path.as_str().expect("config file error").to_string();
+        }
+        if let Some(state_path) = config.get("state") {
+            self.is_stated = true;
+            self.state_path = state_path.as_str().expect("config file error").to_string();
+            if let Ok(state_string) = fs::read_to_string(&self.state_path) {
+                if state_string != "{}" {
+                    self.state = serde_json::from_str(&state_string).expect("config file error")
+                }
+            }
+        }
+        if let Some(word) = config.get("word") {
+            self.is_word_specified = true;
+            *word_to_guess = word.as_str().expect("config file error").to_string();
+        }
+    }
+}
+
+pub struct RoundInfo {
+    already_guessed_position: Vec<(i32, char)>,
+    pub alphabet_color: Vec<Color>,
+    pub word_guessed_this_round: Vec<String>,
+    hint_list: Vec<String>,
+}
+
+impl RoundInfo {
+    pub fn new(info: &Info) -> RoundInfo {
+        let round_info = RoundInfo {
+            already_guessed_position: vec![],
+            alphabet_color: {
+                let mut alphabet: Vec<Color> = vec![];
+                for _i in 0..26 {
+                    let temp = Color::X;
+                    alphabet.push(temp);
+                }
+                alphabet
+            },
+            word_guessed_this_round: vec![],
+            hint_list: info.acceptable_set.clone(),
+        };
+        round_info
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    InvalidWord,
+    AlreadyCorrect,
+    InvalidArgs,
+}
+
+#[derive(Debug)]
+#[derive(Clone)]
+pub enum Color {
+    R,
+    Y,
+    G,
+    X,
+}
+
+impl Color {
+    pub fn to_string(&self) -> String {
+        return match &self {
+            Color::R => { "R".to_string() }
+            Color::Y => { "Y".to_string() }
+            Color::G => { "G".to_string() }
+            Color::X => { "X".to_string() }
+        };
+    }
+    pub fn clone(&self) -> Color {
+        match self {
+            Color::R => { Color::R }
+            Color::Y => { Color::Y }
+            Color::G => { Color::G }
+            Color::X => { Color::X }
+        }
+    }
+    pub fn to_hex(&self) -> u32 {
+        match self {
+            Color::R => RED,
+            Color::Y => YELLOW,
+            Color::G => GREEN,
+            Color::X => GREY,
+        }
+    }
+}
+
+impl Error {
+    pub fn to_string(&self) -> String {
+        return match &self {
+            Error::InvalidWord => { "INVALID".to_string() }
+            Error::AlreadyCorrect => { "CORRECT".to_string() }
+            Error::InvalidArgs => { "InvalidArgs".to_string() }
+        };
+    }
+}
+
+
 /// Analyze args to change info
 /// Return a result with Error, invalid input or args
-pub fn info_analyze(word_to_guess: &mut String, info: &mut Info,args:&Vec<String>) -> Result<(), Error> {
+pub fn info_analyze(word_to_guess: &mut String, info: &mut Info, args: &Vec<String>) -> Result<(), Error> {
     let mut num_args = 0;
     //loop to analyze args
     //first load config
@@ -32,10 +238,7 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info,args:&Vec<String
                         let config_path = args.iter().nth(num_args + 1).expect("did not input word").clone();
                         let config_string = fs::read_to_string(&config_path).expect("config file error");
                         let config: serde_json::Value = serde_json::from_str(&config_string).expect("config file error");
-                        // println!("TEST1");
                         info.load_config(word_to_guess, &config);
-                        // println!("TEST2");
-                        // println!("{}",serde_json::to_string_pretty(&config).unwrap());
                     }
                     _ => {}
                 }
@@ -174,10 +377,7 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
     let mut is_success: bool = false;
     let mut guess_times = 0;
     let mut round_info = RoundInfo::new(&info);
-    if is_tty {
-        println!("This is round {}, please input your guesses",
-                 console::style(info.state.total_rounds + 1).green().bold());
-    }
+
     //initialize alphabet of color
     if info.is_random {
         let start_day = game_time + info.day - 1;//cause do not exist day0
@@ -185,9 +385,16 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
         info.words_appeared.push(word_to_guess.clone());
     } else if !info.is_word_specified {
         word_to_guess.clear();
+        if is_tty {
+            println!("Default mode, please input the answer you set ");
+        }
         io::stdin().read_line(&mut word_to_guess).unwrap();
         word_to_guess.pop();
         assert!(FINAL.contains(&&word_to_guess[..]), "Input illegal! ");
+    }
+    if is_tty {
+        println!("This is round {}, please input your guesses",
+                 console::style(info.state.total_rounds + 1).green().bold());
     }
     *word_to_guess = word_to_guess.to_ascii_lowercase();
     // println!("{}",word_to_guess);
@@ -235,6 +442,7 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
     return Ok(());
 }
 
+/// Use info and start day to change word to guess
 pub fn get_word_by_start_day(word_to_guess: &mut String, info: &Info, start_day: i32) {
     loop {
         *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
@@ -269,7 +477,7 @@ pub fn guess_one_time(
     if info.is_hint {
         round_info.hint_list = get_new_hint_list(&mut round_info.hint_list, &guess_word, &word_result);
         println!("total:{}\n{:?}", round_info.hint_list.len(), round_info.hint_list);
-        if info.is_recommend{
+        if info.is_recommend {
             recommend_from_hint_list(&mut round_info.hint_list);
         }
     }
@@ -296,6 +504,8 @@ pub fn guess_one_time(
     return Ok(());
 }
 
+/// Receives a round_info, the word guessed, and the result of it,
+/// update alphabet_color in round_info
 pub fn update_round_alphabet_color(round_info: &mut RoundInfo, guess_word: &String, word_result: &Vec<Color>) {
     let color_grade = HashMap::from([
         ("G".to_string(), 4),
@@ -321,8 +531,8 @@ pub fn update_round_alphabet_color(round_info: &mut RoundInfo, guess_word: &Stri
 
 /// Receive two words, and give their match degree in form of color vector
 pub fn calculate_color(word_to_guess: &String, guess_word: &String) -> Vec<Color> {
-    let word_to_guess_lower=word_to_guess.to_ascii_lowercase();
-    let guess_word_lower =guess_word.to_ascii_lowercase();
+    let word_to_guess_lower = word_to_guess.to_ascii_lowercase();
+    let guess_word_lower = guess_word.to_ascii_lowercase();
     let mut word_result: Vec<Color> = vec![];
     let mut correct_position_this_round: Vec<i32> = vec![];
     for i in 0..WORDLE_LENS as i32 {
@@ -360,11 +570,11 @@ pub fn calculate_color(word_to_guess: &String, guess_word: &String) -> Vec<Color
 }
 
 /// Receive info, print statistics of guesses
-pub fn print_stats(info: &mut Info) {
+pub fn stats_to_string(info: &mut Info) ->String {
     let mut succeed_rounds: f64 = 0.0;
     let mut succeed_total_guess_times: f64 = 0.0;
     let mut word_guessed_freq: Vec<(String, i32)> = vec![];
-
+    let mut stats=String::new();
     // println!("{}", serde_json::to_string_pretty(&info.state).unwrap());
     for temp in &info.state.games {
         if temp.guesses.contains(&temp.answer) {
@@ -378,7 +588,7 @@ pub fn print_stats(info: &mut Info) {
     let average = if succeed_rounds != 0.0 {
         succeed_total_guess_times / succeed_rounds
     } else { 0.00 };
-    println!("{:.0} {} {:.2}", succeed_rounds, info.state.total_rounds - succeed_rounds as i32, average);
+    stats=format!("{:.0} {} {:.2}\n", succeed_rounds, info.state.total_rounds - succeed_rounds as i32, average);
     word_guessed_freq.sort_by(|a, b| match b.1.cmp(&a.1) {
         Ordering::Greater | Ordering::Less => b.1.cmp(&a.1),
         Ordering::Equal => a.0.cmp(&b.0)
@@ -391,12 +601,13 @@ pub fn print_stats(info: &mut Info) {
         // println!("{}",show_limit);
         // println!("{}",i);
         if i == show_limit {
-            println!("{} {}", temp.0.to_ascii_uppercase(), temp.1);
+            stats+=&format!("{} {}", temp.0.to_ascii_uppercase(), temp.1);
             break;
         }
-        print!("{} {} ", temp.0.to_ascii_uppercase(), temp.1);
+        stats+=&format!("{} {} ", temp.0.to_ascii_uppercase(), temp.1);
         i += 1;
     }
+    stats
 }
 
 /// Receives a vector of 26 color strings and print
@@ -422,6 +633,7 @@ pub fn print_alphabet(alphabet_color: &Vec<Color>) {
     println!();
 }
 
+/// add a word to a frequency list recorded by tuple
 pub fn add_word_to_freq_list(freq_list: &mut Vec<(String, i32)>, word: &String) {
     let mut contain = false;
     for temp in freq_list.iter_mut() {
@@ -447,6 +659,7 @@ pub fn set_from_path(path: &String, set: &mut Vec<String>) {
     }
 }
 
+/// Convert a vector of color to string
 pub fn color_vec_to_string(vec: &Vec<Color>) -> String {
     let mut str = String::new();
     for i in vec {
@@ -468,6 +681,7 @@ pub fn get_new_hint_list(hint_list: &Vec<String>, guess_word: &String, word_resu
     new_hint
 }
 
+/// Use info and round info to read a guess and check it return the result of guess string
 pub fn get_checked_guess(info: &&mut Info, round_info: &mut RoundInfo) -> Result<String, Error> {
     let mut guess_word = String::new();
     let mut is_in_acc = false;
@@ -499,22 +713,24 @@ pub fn get_checked_guess(info: &&mut Info, round_info: &mut RoundInfo) -> Result
     Ok(guess_word)
 }
 
-pub fn recommend_from_hint_list(list:& Vec<String>){
-    let mut temp_list=list.clone();
-    temp_list.sort_by(|a,b|
+/// Print 3 recommend word from the possible list
+pub fn recommend_from_hint_list(list: &Vec<String>) {
+    let mut temp_list = list.clone();
+    temp_list.sort_by(|a, b|
         get_grade_one_depth(list, &b).cmp(&get_grade_one_depth(list, &a))
     );
-    let mut iter=temp_list.iter();
-    let mut count=0;
-    while let Some(t)= iter.next() {
-        print!("{} ",t);
-        count+=1;
-        if count==2 {break }
+    let mut iter = temp_list.iter();
+    let mut count = 0;
+    while let Some(t) = iter.next() {
+        print!("{} ", t);
+        count += 1;
+        if count == 2 { break; }
     }
     println!();
 }
 
-pub fn get_grade_one_depth(list: & Vec<String>, next_guess: &String) -> i32 {
+/// Get the recommend grade of a word
+pub fn get_grade_one_depth(list: &Vec<String>, next_guess: &String) -> i32 {
     let mut quantity_list: Vec<i32> = vec![];
     for possible_answer in list.iter() {
         let result = calculate_color(&possible_answer, &next_guess);
@@ -526,207 +742,3 @@ pub fn get_grade_one_depth(list: & Vec<String>, next_guess: &String) -> i32 {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Game {
-    answer: String,
-    guesses: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct State {
-    total_rounds: i32,
-    games: Vec<Game>,
-}
-
-pub struct Info {
-    is_difficult: bool,
-    pub is_random: bool,
-    pub is_word_specified: bool,
-    pub is_stats: bool,
-    is_recommend: bool,
-    is_seeded: bool,
-    is_special_day: bool,
-    pub is_stated: bool,
-    is_hint: bool,
-    succeeded_game: i32,
-    failed_game: i32,
-    words_appeared: Vec<String>,
-    pub day: i32,
-    pub seed: u64,
-    pub shuffled_seq: Vec<usize>,
-    final_path: String,
-    acceptable_path: String,
-    pub final_set: Vec<String>,
-    pub acceptable_set: Vec<String>,
-    pub state: State,
-    pub state_path: String,
-}
-
-impl Info {
-    pub fn new() -> Info {
-        Info {
-            is_random: false,
-            is_difficult: false,
-            is_word_specified: false,
-            is_stats: false,
-            is_recommend: false,
-            is_seeded: false,
-            is_special_day: false,
-            is_stated: false,
-            is_hint: false,
-            succeeded_game: 0,
-            failed_game: 0,
-            words_appeared: vec![],
-            day: 1,
-            seed: 0,
-            shuffled_seq: {
-                let mut temp: Vec<usize> = (0..FINAL.len()).collect();
-                let mut rng: StdRng = SeedableRng::seed_from_u64(0);
-                temp.shuffle(&mut rng);
-                temp
-            },
-            final_path: "".to_string(),
-            acceptable_path: "".to_string(),
-            final_set: {
-                let mut a: Vec<String> = vec![];
-                for i in FINAL.iter() {
-                    a.push(i.to_string());
-                };
-                a
-            },
-            acceptable_set: {
-                let mut a: Vec<String> = vec![];
-                for i in ACCEPTABLE {
-                    a.push(i.to_string());
-                };
-                a
-            },
-            state: {
-                State {
-                    total_rounds: 0,
-                    games: vec![],
-                }
-            },
-            state_path: String::new(),
-        }
-    }
-    fn load_config(&mut self, word_to_guess: &mut String, config: &serde_json::Value) {
-        if let Some(is_random) = config.get("random") {
-            self.is_random = is_random.as_bool().expect("config file error");
-        }
-        if let Some(is_difficult) = config.get("difficult") {
-            self.is_difficult = is_difficult.as_bool().expect("config file error");
-        }
-        if let Some(is_stats) = config.get("stats") {
-            self.is_stats = is_stats.as_bool().expect("config file error");
-        }
-        if let Some(day) = config.get("day") {
-            self.is_special_day = true;
-            self.day = day.as_i64().expect("config file error") as i32;
-        }
-        if let Some(seed) = config.get("seed") {
-            self.is_seeded = true;
-            self.seed = seed.as_u64().expect("config file error");
-        }
-        if let Some(final_set_path) = config.get("final_set") {
-            self.final_path = final_set_path.as_str().expect("config file error").to_string();
-        }
-        if let Some(acceptable_path) = config.get("acceptable_set") {
-            self.acceptable_path = acceptable_path.as_str().expect("config file error").to_string();
-        }
-        if let Some(state_path) = config.get("state") {
-            self.is_stated = true;
-            self.state_path = state_path.as_str().expect("config file error").to_string();
-            if let Ok(state_string) = fs::read_to_string(&self.state_path) {
-                if state_string != "{}" {
-                    self.state = serde_json::from_str(&state_string).expect("config file error")
-                }
-            }
-        }
-        if let Some(word) = config.get("word") {
-            self.is_word_specified = true;
-            *word_to_guess = word.as_str().expect("config file error").to_string();
-        }
-    }
-}
-
-pub struct RoundInfo {
-    already_guessed_position: Vec<(i32, char)>,
-    pub alphabet_color: Vec<Color>,
-    word_guessed_this_round: Vec<String>,
-    hint_list: Vec<String>,
-}
-
-impl RoundInfo {
-    pub fn new(info: &Info) -> RoundInfo {
-        let round_info = RoundInfo {
-            already_guessed_position: vec![],
-            alphabet_color: {
-                let mut alphabet: Vec<Color> = vec![];
-                for _i in 0..26 {
-                    let temp = Color::X;
-                    alphabet.push(temp);
-                }
-                alphabet
-            },
-            word_guessed_this_round: vec![],
-            hint_list: info.acceptable_set.clone(),
-        };
-        round_info
-    }
-}
-
-
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidWord,
-    AlreadyCorrect,
-    InvalidArgs,
-}
-
-#[derive(Debug)]
-#[derive(Clone)]
-pub enum Color {
-    R,
-    Y,
-    G,
-    X,
-}
-
-impl Color {
-    pub fn to_string(&self) -> String {
-        return match &self {
-            Color::R => { "R".to_string() }
-            Color::Y => { "Y".to_string() }
-            Color::G => { "G".to_string() }
-            Color::X => { "X".to_string() }
-        };
-    }
-    pub fn clone(&self) -> Color {
-        match self {
-            Color::R => { Color::R }
-            Color::Y => { Color::Y }
-            Color::G => { Color::G }
-            Color::X => { Color::X }
-        }
-    }
-    pub fn to_hex(&self) -> u32 {
-        match self {
-            Color::R => RED,
-            Color::Y => YELLOW,
-            Color::G => GREEN,
-            Color::X => GREY,
-        }
-    }
-}
-
-impl Error {
-    pub fn to_string(&self) -> String {
-        return match &self {
-            Error::InvalidWord => { "INVALID".to_string() }
-            Error::AlreadyCorrect => { "CORRECT".to_string() }
-            Error::InvalidArgs => { "InvalidArgs".to_string() }
-        };
-    }
-}
