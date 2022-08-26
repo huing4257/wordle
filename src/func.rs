@@ -1,4 +1,5 @@
 mod builtin_words;
+
 use std::collections::HashMap;
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
@@ -6,24 +7,29 @@ use std::{fs, io};
 use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
 use builtin_words::{ACCEPTABLE, FINAL};
+
 pub const WORDLE_LENS: usize = 5;
 pub const ALPHABET: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
+pub const GREY: u32 = 0xd1d1d1;
+pub const RED: u32 = 0x787c7f;
+pub const GREEN: u32 = 0x6ca965;
+pub const YELLOW: u32 = 0xc8b653;
 
 /// Analyze args to change info
 /// Return a result with Error, invalid input or args
-pub fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), Error> {
+pub fn info_analyze(word_to_guess: &mut String, info: &mut Info,args:&Vec<String>) -> Result<(), Error> {
     let mut num_args = 0;
     //loop to analyze args
     //first load config
     loop {
-        match std::env::args().nth(num_args) {
-            //first decide sets
+        match args.iter().nth(num_args) {
+            //first decide sets.clone().
             None => break,
             Some(arg) => {
                 match &arg[..] {
                     "-c" | "--config" => {
-                        let config_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        let config_path = args.iter().nth(num_args + 1).expect("did not input word").clone();
                         let config_string = fs::read_to_string(&config_path).expect("config file error");
                         let config: serde_json::Value = serde_json::from_str(&config_string).expect("config file error");
                         // println!("TEST1");
@@ -40,16 +46,16 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), E
     //next decide sets
     let mut num_args = 0;
     loop {
-        match std::env::args().nth(num_args) {
-            //first decide sets
+        match args.iter().nth(num_args) {
+            //first decide sets.clone().
             None => break,
             Some(arg) => {
                 match &arg[..] {
                     "-f" | "--final-set" => {
-                        info.final_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        info.final_path = args.iter().nth(num_args + 1).expect("did not input word").clone();
                     }
                     "-a" | "--acceptable-set" => {
-                        info.acceptable_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        info.acceptable_path = args.iter().nth(num_args + 1).expect("did not input word").clone();
                     }
                     _ => {}
                 }
@@ -78,8 +84,8 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), E
     let mut num_args = 0;
     loop {
         //loop to analyze args
-        match std::env::args().nth(num_args) {
-            //first decide sets
+        match args.iter().nth(num_args) {
+            //first decide sets.clone().
             None => break,
             Some(arg) => {
                 // println!("{arg}");
@@ -87,8 +93,8 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), E
                 match &arg[..] {
                     "-w" | "--word" => {
                         info.is_word_specified = true;
-                        *word_to_guess = std::env::args().nth(num_args + 1).expect("did not input word");
-                        assert!(FINAL.contains(&&word_to_guess[..]),"Input illegal! ");
+                        *word_to_guess = args.iter().nth(num_args + 1).expect("did not input word").clone();
+                        assert!(FINAL.contains(&&word_to_guess[..]), "Input illegal! ");
                     }
                     "-r" | "--random" => {
                         info.is_random = true
@@ -102,16 +108,16 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), E
                     "-d" | "--day" => {
                         info.is_special_day = true;
                         info.day =
-                            std::env::args().nth(num_args + 1).expect("did not input day").parse().unwrap();
+                            args.iter().nth(num_args + 1).expect("did not input day").clone().parse().unwrap();
                     }
                     "-s" | "--seed" => {
                         info.is_seeded = true;
                         info.seed =
-                            std::env::args().nth(num_args + 1).expect("did not input seed").parse().unwrap();
+                            args.iter().nth(num_args + 1).expect("did not input seed").clone().parse().unwrap();
                     }
                     "-S" | "--state" => {
                         info.is_stated = true;
-                        info.state_path = std::env::args().nth(num_args + 1).expect("did not input word");
+                        info.state_path = args.iter().nth(num_args + 1).expect("did not input word").clone();
                         if let Ok(state_string) = fs::read_to_string(&info.state_path) {
                             // println!("{}", info.state_path);
                             // let mut s = String::new();
@@ -130,7 +136,7 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info) -> Result<(), E
                     "-h" | "--hint" => {
                         info.is_hint = true;
                     }
-                    "-u" | "--tui"=>{info.is_tui=true}
+                    "-c" | "--recommend" => { info.is_recommend = true }
                     _ => {}
                 }
             }
@@ -167,10 +173,10 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
     let game_time = info.failed_game + info.succeeded_game;
     let mut is_success: bool = false;
     let mut guess_times = 0;
-    let mut round_info = RoundInfo::new(& info);
+    let mut round_info = RoundInfo::new(&info);
     if is_tty {
         println!("This is round {}, please input your guesses",
-                 console::style(info.state.total_rounds+1).green().bold());
+                 console::style(info.state.total_rounds + 1).green().bold());
     }
     //initialize alphabet of color
     for _i in 0..26 {
@@ -185,7 +191,7 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
         word_to_guess.clear();
         io::stdin().read_line(&mut word_to_guess).unwrap();
         word_to_guess.pop();
-        assert!(FINAL.contains(&&word_to_guess[..]),"Input illegal! ");
+        assert!(FINAL.contains(&&word_to_guess[..]), "Input illegal! ");
     }
     *word_to_guess = word_to_guess.to_ascii_lowercase();
     // println!("{}",word_to_guess);
@@ -233,7 +239,7 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
     return Ok(());
 }
 
-pub fn get_word_by_start_day(word_to_guess: &mut  String, info: & Info, start_day: i32) {
+pub fn get_word_by_start_day(word_to_guess: &mut String, info: &Info, start_day: i32) {
     loop {
         *word_to_guess = info.final_set.iter().nth(info.shuffled_seq[start_day as usize]).unwrap().to_string();
         if !info.words_appeared.contains(&word_to_guess) {
@@ -256,18 +262,20 @@ pub fn guess_one_time(
     //Here, the input is finally valid enough
     round_info.word_guessed_this_round.push(guess_word.clone().to_ascii_uppercase());
 
-    let word_result = calculate_color(word_to_guess,  &guess_word);
+    let word_result = calculate_color(word_to_guess, &guess_word);
     for i in 0..WORDLE_LENS {
-        if let Color::G=word_result[i]{
+        if let Color::G = word_result[i] {
             round_info.already_guessed_position.push(
                 (i as i32, guess_word.chars().nth(i as usize).unwrap())
             )
         }
     }
     if info.is_hint {
-        round_info.hint_list=get_new_hint_list(&mut round_info.hint_list, &guess_word, & word_result);
-        println!("total:{}\n{:?}",round_info.hint_list.len(),round_info.hint_list);
-        // recommend_from_hint_list(&mut round_info.hint_list);
+        round_info.hint_list = get_new_hint_list(&mut round_info.hint_list, &guess_word, &word_result);
+        println!("total:{}\n{:?}", round_info.hint_list.len(), round_info.hint_list);
+        if info.is_recommend{
+            recommend_from_hint_list(&mut round_info.hint_list);
+        }
     }
     //print the match result
     for i in 0..WORDLE_LENS {
@@ -287,6 +295,12 @@ pub fn guess_one_time(
     }
     print!(" ");
     //use hash to mark priority
+    update_round_alphabet_color(round_info, &guess_word, &word_result);
+    if guess_word == *word_to_guess { return Err(Error::AlreadyCorrect); }
+    return Ok(());
+}
+
+pub fn update_round_alphabet_color(round_info: &mut RoundInfo, guess_word: &String, word_result: &Vec<Color>) {
     let color_grade = HashMap::from([
         ("G".to_string(), 4),
         ("Y".to_string(), 3),
@@ -307,16 +321,16 @@ pub fn guess_one_time(
             }
         }
     }
-    if guess_word == *word_to_guess { return Err(Error::AlreadyCorrect); }
-    return Ok(());
 }
 
 /// Receive two words, and give their match degree in form of color vector
-pub fn calculate_color(word_to_guess: & String,  guess_word: &String) -> Vec<Color> {
+pub fn calculate_color(word_to_guess: &String, guess_word: &String) -> Vec<Color> {
+    let word_to_guess_lower=word_to_guess.to_ascii_lowercase();
+    let guess_word_lower =guess_word.to_ascii_lowercase();
     let mut word_result: Vec<Color> = vec![];
     let mut correct_position_this_round: Vec<i32> = vec![];
     for i in 0..WORDLE_LENS as i32 {
-        if guess_word.chars().nth(i as usize) == word_to_guess.chars().nth(i as usize) {
+        if guess_word_lower.chars().nth(i as usize) == word_to_guess_lower.chars().nth(i as usize) {
             correct_position_this_round.push(i);
         }
     }
@@ -335,7 +349,7 @@ pub fn calculate_color(word_to_guess: & String,  guess_word: &String) -> Vec<Col
                 continue;
             }
             //mark which letter in goal is appeared in wrong place, make sure G + Y <= actual num
-            if guess_word.chars().nth(position_in_guess as usize) == word_to_guess.chars().nth(position_in_answer as usize) {
+            if guess_word_lower.chars().nth(position_in_guess as usize) == word_to_guess_lower.chars().nth(position_in_answer as usize) {
                 word_result.push(Color::Y);
                 char_to_ignore_to_guess.push(position_in_answer);
                 is_in = true;
@@ -437,8 +451,8 @@ pub fn set_from_path(path: &String, set: &mut Vec<String>) {
     }
 }
 
-pub fn color_vec_to_string(vec:&Vec<Color>) ->String{
-    let mut str=String::new();
+pub fn color_vec_to_string(vec: &Vec<Color>) -> String {
+    let mut str = String::new();
     for i in vec {
         str.push(i.to_string().parse().unwrap());
     }
@@ -447,7 +461,7 @@ pub fn color_vec_to_string(vec:&Vec<Color>) ->String{
 
 ///Receive a word list, a word guessed, and a guess result, return a word list contains all words in the former list
 ///that matches the result
-pub fn get_new_hint_list(hint_list: & Vec<String>, guess_word: &String, word_result: & Vec<Color>) ->Vec<String>{
+pub fn get_new_hint_list(hint_list: &Vec<String>, guess_word: &String, word_result: &Vec<Color>) -> Vec<String> {
     let mut new_hint: Vec<String> = vec![];
     for acc in hint_list {
         if color_vec_to_string(&calculate_color(acc, guess_word)) ==
@@ -489,6 +503,33 @@ pub fn get_checked_guess(info: &&mut Info, round_info: &mut RoundInfo) -> Result
     Ok(guess_word)
 }
 
+pub fn recommend_from_hint_list(list:& Vec<String>){
+    let mut temp_list=list.clone();
+    temp_list.sort_by(|a,b|
+        get_grade_one_depth(list, &b).cmp(&get_grade_one_depth(list, &a))
+    );
+    let mut iter=temp_list.iter();
+    let mut count=0;
+    while let Some(t)= iter.next() {
+        print!("{} ",t);
+        count+=1;
+        if count==2 {break }
+    }
+    println!();
+}
+
+pub fn get_grade_one_depth(list: & Vec<String>, next_guess: &String) -> i32 {
+    let mut quantity_list: Vec<i32> = vec![];
+    for possible_answer in list.iter() {
+        let result = calculate_color(&possible_answer, &next_guess);
+        let acc_quantity = get_new_hint_list(&list, next_guess, &result).len() as i32;
+        quantity_list.push(acc_quantity);
+    }
+    let average: i32 = quantity_list.iter().sum();
+    average
+}
+
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Game {
     answer: String,
@@ -506,7 +547,7 @@ pub struct Info {
     pub is_random: bool,
     pub is_word_specified: bool,
     pub is_stats: bool,
-    is_tui:bool,
+    is_recommend: bool,
     is_seeded: bool,
     is_special_day: bool,
     pub is_stated: bool,
@@ -514,43 +555,25 @@ pub struct Info {
     succeeded_game: i32,
     failed_game: i32,
     words_appeared: Vec<String>,
-    day: i32,
-    seed: u64,
-    shuffled_seq: Vec<usize>,
+    pub day: i32,
+    pub seed: u64,
+    pub shuffled_seq: Vec<usize>,
     final_path: String,
     acceptable_path: String,
-    final_set: Vec<String>,
-    acceptable_set: Vec<String>,
+    pub final_set: Vec<String>,
+    pub acceptable_set: Vec<String>,
     pub state: State,
     pub state_path: String,
 }
 
-pub struct RoundInfo {
-    already_guessed_position: Vec<(i32, char)>,
-    alphabet_color: Vec<Color>,
-    word_guessed_this_round: Vec<String>,
-    hint_list: Vec<String>,
-}
-
-impl RoundInfo {
-    pub fn new(info: & Info) -> RoundInfo {
-        let mut round_info = RoundInfo {
-            already_guessed_position: vec![],
-            alphabet_color: vec![],
-            word_guessed_this_round: vec![],
-            hint_list: info.acceptable_set.clone(),
-        };
-        round_info
-    }
-}
 impl Info {
-    pub fn new() ->Info{
+    pub fn new() -> Info {
         Info {
             is_random: false,
             is_difficult: false,
             is_word_specified: false,
             is_stats: false,
-            is_tui: false,
+            is_recommend: false,
             is_seeded: false,
             is_special_day: false,
             is_stated: false,
@@ -631,6 +654,34 @@ impl Info {
     }
 }
 
+pub struct RoundInfo {
+    already_guessed_position: Vec<(i32, char)>,
+    pub alphabet_color: Vec<Color>,
+    word_guessed_this_round: Vec<String>,
+    hint_list: Vec<String>,
+}
+
+impl RoundInfo {
+    pub fn new(info: &Info) -> RoundInfo {
+        let round_info = RoundInfo {
+            already_guessed_position: vec![],
+            alphabet_color: {
+                let mut alphabet: Vec<Color> = vec![];
+                for _i in 0..26 {
+                    let temp = Color::X;
+                    alphabet.push(temp);
+                }
+                alphabet
+            },
+            word_guessed_this_round: vec![],
+            hint_list: info.acceptable_set.clone(),
+        };
+        round_info
+    }
+}
+
+
+
 #[derive(Debug)]
 pub enum Error {
     InvalidWord,
@@ -662,6 +713,14 @@ impl Color {
             Color::Y => { Color::Y }
             Color::G => { Color::G }
             Color::X => { Color::X }
+        }
+    }
+    pub fn to_hex(&self) -> u32 {
+        match self {
+            Color::R => RED,
+            Color::Y => YELLOW,
+            Color::G => GREEN,
+            Color::X => GREY,
         }
     }
 }

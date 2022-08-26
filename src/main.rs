@@ -1,4 +1,4 @@
-mod builtin_words;
+
 use func;
 
 use std::fs;
@@ -17,7 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //write a struct to save info
     let mut info = Info::new();
     let mut is_continue_playing = true;
-    func::info_analyze(&mut word_to_guess, &mut info).expect("args error");
+    let args:Vec<String>=std::env::args().collect();
+    func::info_analyze(&mut word_to_guess, &mut info,&args).expect("args error");
     if is_tty {
         println!(
             "{}", console::style("Game Starts!").bold().blink().blue()
@@ -68,30 +69,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// fn recommend_from_hint_list(list:& Vec<String>){
-//     let mut temp_list=list.clone();
-//     temp_list.sort_by(|a,b|
-//         get_grade_one_depth(list, &b).cmp(&get_grade_one_depth(list, &a))
-//     );
-//     let mut iter=temp_list.iter();
-//         let mut count=0;
-//         while let Some(t)= iter.next() {
-//             print!("{} ",t);
-//             count+=1;
-//             if count==2 {break }
-//         }
-//     println!();
-// }
-
-// fn get_grade_one_depth(list: & Vec<String>, next_guess: &String) -> i32 {
-//     let mut quantity_list: Vec<i32> = vec![];
-//     for possible_answer in list.iter() {
-//         let result = calculate_color(&possible_answer, &next_guess);
-//         let acc_quantity = get_new_hint_list(&list, next_guess, &result).len() as i32;
-//         quantity_list.push(acc_quantity);
-//     }
-//     let average: i32 = quantity_list.iter().sum();
-//     average
-// }
 
 
