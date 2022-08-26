@@ -179,10 +179,6 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
                  console::style(info.state.total_rounds + 1).green().bold());
     }
     //initialize alphabet of color
-    for _i in 0..26 {
-        let temp = Color::X;
-        round_info.alphabet_color.push(temp);
-    }
     if info.is_random {
         let start_day = game_time + info.day - 1;//cause do not exist day0
         get_word_by_start_day(&mut word_to_guess, info, start_day);
