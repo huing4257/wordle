@@ -289,8 +289,6 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info, args: &Vec<Stri
             //first decide sets.clone().
             None => break,
             Some(arg) => {
-                // println!("{arg}");
-
                 match &arg[..] {
                     "-w" | "--word" => {
                         info.is_word_specified = true;
@@ -320,9 +318,6 @@ pub fn info_analyze(word_to_guess: &mut String, info: &mut Info, args: &Vec<Stri
                         info.is_stated = true;
                         info.state_path = args.iter().nth(num_args + 1).expect("did not input word").clone();
                         if let Ok(state_string) = fs::read_to_string(&info.state_path) {
-                            // println!("{}", info.state_path);
-                            // let mut s = String::new();
-                            // io::stdin().read_line(&mut s).unwrap();
                             if state_string != "{}" {
                                 info.state = match serde_json::from_str(&state_string) {
                                     Ok(x) => x,
@@ -395,7 +390,6 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
                  console::style(info.state.total_rounds + 1).green().bold());
     }
     *word_to_guess = word_to_guess.to_ascii_lowercase();
-    // println!("{}",word_to_guess);
     while guess_times <= 5 {
         //Guess 6 times
 
@@ -419,7 +413,6 @@ pub fn guess_round(mut word_to_guess: &mut String, mut info: &mut Info) -> Resul
             }
         }
     }
-    // println!("{:?}",word_guessed_this_round);
     info.state.games.push(Game { answer: word_to_guess.clone().to_ascii_uppercase(), guesses: round_info.word_guessed_this_round });
     info.state.total_rounds += 1;
 
@@ -573,7 +566,6 @@ pub fn stats_to_string(info: &mut Info) ->String {
     let mut succeed_total_guess_times: f64 = 0.0;
     let mut word_guessed_freq: Vec<(String, i32)> = vec![];
     let mut stats:String;
-    // println!("{}", serde_json::to_string_pretty(&info.state).unwrap());
     for temp in &info.state.games {
         if temp.guesses.contains(&temp.answer) {
             succeed_rounds += 1.0;
@@ -596,8 +588,6 @@ pub fn stats_to_string(info: &mut Info) ->String {
     } else { 5 };
     let mut i = 1;
     for temp in &word_guessed_freq {
-        // println!("{}",show_limit);
-        // println!("{}",i);
         if i == show_limit {
             stats+=&format!("{} {}", temp.0.to_ascii_uppercase(), temp.1);
             break;
