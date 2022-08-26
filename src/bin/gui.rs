@@ -4,7 +4,7 @@ use fltk::{app, button::{self, Button}, dialog, enums::{Color, Font, FrameType},
            group::{self, PackType}, menu, prelude::*, window::{Window}};
 use fltk::enums::Shortcut;
 use func;
-use func::{update_round_alphabet_color, Info, RoundInfo, Error, stats_to_string};
+use func::{update_round_alphabet_color, Info, RoundInfo, stats_to_string};
 
 pub const ALPHABET: &[char] = &[
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -240,6 +240,7 @@ fn main() {
                             dialog::message(500, 300, "Word doesn't exist!");
                         }
                         if is_success {
+                            info.state.games.push(func::Game { answer: word_to_guess.clone(), guesses: round_info.word_guessed_this_round.clone() });
                             dialog::message(500, 300, "You win! Click return arrow to reset ");
                             is_good = false;
                         }
@@ -322,10 +323,10 @@ fn main() {
                 }
                 Message::Open => {
                     let mut saving = dialog::NativeFileChooser::new(
-                        dialog::NativeFileChooserType::BrowseSaveFile);
+                        dialog::NativeFileChooserType::BrowseFile);
                     saving.show();
                     let state_path = saving.filename().into_os_string().into_string().unwrap();
-                    args.push("-s".to_string());
+                    args.push("-S".to_string());
                     args.push(state_path);
                     func::info_analyze(&mut word_to_guess, &mut info, &args).expect("input error");
                 }
@@ -341,6 +342,7 @@ fn main() {
                     }
                 }
                 Message::Show => {
+                    println!("{}",stats_to_string(&mut info));
                     dialog::message(500, 300,&stats_to_string(&mut info))
                 }
             }

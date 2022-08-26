@@ -5,8 +5,6 @@ use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
 use std::{fs, io};
 use std::cmp::Ordering;
-use std::fmt::Display;
-use fltk::enums::Cursor::S;
 use serde::{Deserialize, Serialize};
 use builtin_words::{ACCEPTABLE, FINAL};
 
@@ -574,7 +572,7 @@ pub fn stats_to_string(info: &mut Info) ->String {
     let mut succeed_rounds: f64 = 0.0;
     let mut succeed_total_guess_times: f64 = 0.0;
     let mut word_guessed_freq: Vec<(String, i32)> = vec![];
-    let mut stats=String::new();
+    let mut stats:String;
     // println!("{}", serde_json::to_string_pretty(&info.state).unwrap());
     for temp in &info.state.games {
         if temp.guesses.contains(&temp.answer) {
